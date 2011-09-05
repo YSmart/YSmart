@@ -3,6 +3,7 @@
 import sys
 import os.path
 import ystree
+import copy
 
 ##input exp should be YFuncExp
 
@@ -269,13 +270,17 @@ def __where_convert_to_java__(exp,buf_dict):
 			
 			for tmp_exp in exp.parameter_list:
 
-				if isinstance(tmp_exp,ystree.YFuncExp) is False:
-					print 1/0
-				
 				tmp_str = __where_convert_to_java__(tmp_exp,buf_dict)
 				tmp_list.append(tmp_str)
 
 			return_str = __operator_to_java__(op_type,exp.func_name,tmp_list)
+
+	elif isinstance(exp, ystree.YConsExp):
+		if exp.cons_type == "BOOLEAN":
+			if exp.cons_value == "FALSE":
+				return "false"
+			else:
+				return "true"
 
 
 	return return_str
@@ -747,6 +752,106 @@ def __get_join_key__(exp,col_list,table):
 		if isinstance(x,ystree.YFuncExp):
 			__get_join_key__(x,col_list,table)
 
+### replace the exp with NULL if its table name is not the specified one.
+
+def __gen_func_exp__(exp,table_name):
+
+	ret_exp = None
+	
+	if not isinstance(exp,ystree.YFuncExp):
+		return None
+
+	new_list = []
+
+	for x in exp.parameter_list:
+		if isinstance(x,ystree.YRawColExp):
+			if x.table_name != table_name:
+				tmp_exp = ystree.YConsExp("\"NULL\"","TEXT")
+				new_list.append(tmp_exp)
+			else:
+				new_list.append(x)
+		elif isinstance(x,ystree.YFuncExp):
+			tmp_exp = __gen_func_exp__(x,table_name)
+			if tmp_exp is None:
+				print 1/0
+
+			new_list.append(tmp_exp)
+		else:
+			new_list.append(x)
+
+	ret_exp = ystree.YFuncExp(exp.func_name,new_list)
+	
+	return ret_exp
+
+##generate a new list ,which contains the exps with the specified table name.
+
+def __gen_join_list__(cur_list,new_list,table_name):
+
+	count = 0
+	
+	for exp in cur_list:
+		if isinstance(exp,ystree.YRawColExp):
+			if exp.table_name != table_name:
+				count = count +1
+
+			else:
+				new_list.append(exp)
+
+		elif isinstance(exp,ystree.YFuncExp):
+			tmp_exp = __gen_func_exp__(exp,table_name)
+			new_list.append(tmp_exp)
+
+	tmp_exp = ystree.YConsExp("\"NULL\"","TEXT")
+	for x in range(0,count):
+		new_list.append(tmp_exp)
+
+def __gen_join_where__(cur_exp,table_name):
+
+	ret_exp = None
+	
+	if not isinstance(cur_exp,ystree.YFuncExp):
+		return None
+
+	if cur_exp.func_name in bool_func_dict.keys():
+		for x in cur_exp.parameter_list:
+			if not isinstance(x,ystree.YFuncExp):
+				print 1/0
+
+			tmp_exp = __gen_join_where__(x,table_name)
+
+			if ret_exp == None:
+				ret_exp = tmp_exp
+			else:
+				para_list = []
+				para_list.append(ret_exp)
+				para_list.append(tmp_exp)
+				ret_exp = ystree.YFuncExp(cur_exp.func_name,para_list)
+
+		return ret_exp
+	else:
+		tmp_bool = True
+
+		if cur_exp.func_name == "IS":
+			print 1/0
+	
+		para1 = cur_exp.parameter_list[0]
+		para2 = cur_exp.parameter_list[1]
+
+		if isinstance(para1,ystree.YRawColExp):
+			if para1.table_name != table_name:
+				tmp_bool = False
+
+		if isinstance(para2,ystree.YRawColExp):
+			if para2.table_name != table_name:
+				tmp_bool = False
+
+		if tmp_bool == True:
+			ret_exp = copy.deepcopy(cur_exp)
+		else:
+			ret_exp = ystree.YConsExp("FALSE","BOOLEAN") 
+
+		return  ret_exp
+
 
 def __join_gen_mr__(tree,fo):
 
@@ -944,25 +1049,126 @@ def __join_gen_mr__(tree,fo):
 	print >>fo,"\t\t\t\t}\n"
 	print >>fo,"\t\t\t}\n" ### end of while
 
-	print >>fo,"\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
-	
-	print >>fo,"\t\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
 
 	buf_dict = {}
 	left_line_buffer = "left_buf"
 	right_line_buffer = "right_buf"
 
-	print >>fo,"\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
-	print >>fo,"\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(j)).split(\"\\\|\");"
 
 	buf_dict["LEFT"] = "left_buf"
 	buf_dict["RIGHT"] = "right_buf"
 
 	if tree.join_explicit is True:
-###fix me here: how to handle explicit join
-		pass
+		join_type = tree.join_type.upper()
+
+		if join_type == "LEFT":
+			reduce_value = __gen_mr_value__(tree.select_list.tmp_exp_list,reduce_value_type,buf_dict)
+			print >>fo,"\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
+			print >>fo,"\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
+
+			print >>fo, "\t\t\t\tif(" + right_array + ".size()>0){\n"
+
+			print >>fo,"\t\t\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+			print >>fo,"\t\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(j)).split(\"\\\|\");"
+			if tree.where_condition is not None:
+				exp = tree.where_condition.where_condition_exp
+				
+				print >>fo,"\t\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n" 
+
+				print >>fo,"\t\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
+
+				tmp_output = "output.collect("
+
+				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+				tmp_output += "key_op"
+				tmp_output += ", "
+				tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+				tmp_output += ");"
+
+				print >>fo, "\t\t\t\t\t\t\t",tmp_output
+
+				print >>fo,"\t\t\t\t\t\t}\n"
+
+			else:
+				if tree.select_list is None:
+					print 1/0
+
+				print >>fo,"\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
+				tmp_output = "output.collect("
+
+				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+				tmp_output += "key_op"
+				tmp_output += ", "
+				tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+				tmp_output += ");"
+
+				print >>fo, "\t\t\t\t\t\t",tmp_output
+
+			print >>fo, "\t\t\t\t\t}\n"
+
+			print >>fo, "\t\t\t\t}else{\n"
+
+##### generate new select_list and where_condition.
+			new_list = []
+
+			__gen_join_list__(tree.select_list.tmp_exp_list,new_list,"LEFT")
+
+			reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+
+			if tree.where_condition is not None:
+				new_where = None
+				new_where = __gen_join_where__(tree.where_condition.where_condition_exp,"LEFT")
+				
+				if new_where is None:
+					print 1/0
+
+				print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n" 
+
+				print >>fo,"\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
+
+				tmp_output = "output.collect("
+
+				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+				tmp_output += "key_op"
+				tmp_output += ", "
+				tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+				tmp_output += ");"
+
+				print >>fo,"\t\t\t\t\t\t",tmp_output
+
+				print >>fo, "\t\t\t\t\t}"
+
+				
+			else:
+				print >>fo,"\t\t\t\t\tNullWritable key_op = NullWritable.get();"
+				tmp_output = "output.collect("
+				tmp_output += "key_op"
+				tmp_output += ","
+				tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+				tmp_output += ");"
+
+				print >>fo,"\t\t\t\t\t",tmp_output
+
+			print >>fo, "\t\t\t\t}\n" ### end of else
+
+			print >>fo, "\t\t\t}\n" ## end of for
+
+		elif join_type == "RIGHT":
+
+			print >>fo,"\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+
+			print >>fo, "\t\t\t}\n" ## end of for
+
+		else:
+			pass
 
 	else:
+		print >>fo,"\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
+		
+		print >>fo,"\t\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+
+		print >>fo,"\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
+		print >>fo,"\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(j)).split(\"\\\|\");"
 
 		reduce_key = __gen_mr_value__(tree.select_list.tmp_exp_list[:1],reduce_key_type,buf_dict)
 		reduce_value = __gen_mr_value__(tree.select_list.tmp_exp_list,reduce_value_type,buf_dict)
