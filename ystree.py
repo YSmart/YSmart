@@ -416,7 +416,8 @@ class YRawColExp(YExpBase):
 	self.func_obj = func_obj
 
     def convert_to_upper(self):
-	self.column_name = self.column_name.upper()
+### the column_name can be either string  or number (index)
+	self.column_name = str(self.column_name).upper()
 	self.table_name = self.table_name.upper()
 
     def has_groupby_func(self):
@@ -2895,7 +2896,7 @@ def predicate_pushdown(tree):
 
 			__get_func_para__(exp,col_list)
 			if len(col_list) == 0:
-				tree.where_conditon = None
+				tree.where_condition = None
 
 		predicate_pushdown(tree.left_child)
 		predicate_pushdown(tree.right_child)
@@ -3218,16 +3219,16 @@ def gen_column_index(tree):
 						for tmp in right_exp:
 							if isinstance(tmp,YRawColExp):
 								if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-									x.table_name = "LEFT"
+									x.table_name = "RIGHT"
 									x.column_name = right_exp.index(tmp)
-									if "LEFT" not in tree.table_list:
-										tree.table_list.append("LEFT")
+									if "RIGHT" not in tree.table_list:
+										tree.table_list.append("RIGHT")
 									break
 							else:
 								if x.column_name == right_select[tmp]:
-									x.table_name = "LEFT"
-									if "LEFT" not in tree.table_list:
-										tree.table_list.append("LEFT")
+									x.table_name = "RIGHT"
+									if "RIGHT" not in tree.table_list:
+										tree.table_list.append("RIGHT")
 									x.column_name = right_exp.index(tmp)
 									break
 					continue
