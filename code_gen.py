@@ -96,6 +96,7 @@ def __select_func_convert_to_java__(exp,buf_dict):
 		para2 = exp.parameter_list[1]
 		
 		if isinstance(para1,ystree.YRawColExp):
+			return_str += "("
 			return_str += __para_to_java__(para1.column_type,para1.column_name,buf_dict[para1.table_name])
 
 		elif isinstance(para1,ystree.YFuncExp):
@@ -105,6 +106,7 @@ def __select_func_convert_to_java__(exp,buf_dict):
 
 		else:
 			#return_str += __para_to_java__(para1.cons_type,para1.cons_value,None)
+			return_str += "("
 			return_str += para1.cons_value
 	
 		if exp.func_name == "PLUS":
@@ -118,13 +120,16 @@ def __select_func_convert_to_java__(exp,buf_dict):
 
 		if isinstance(para2,ystree.YRawColExp):
 			return_str += __para_to_java__(para2.column_type,para2.column_name,buf_dict[para2.table_name])
+			return_str += ")"
 
 		elif isinstance(para2,ystree.YFuncExp):
 			return_str += __select_func_convert_to_java__(para2,buf_dict)
+			return_str += ")"
 
 		else:
 			#return_str += __para_to_java__(para2.cons_type,para2.cons_value,None)
 			return_str += para2.cons_value
+			return_str += ")"
 		
 
 	elif exp.func_name in agg_func_list:
@@ -752,6 +757,7 @@ def __get_join_key__(exp,col_list,table):
 		if isinstance(x,ystree.YFuncExp):
 			__get_join_key__(x,col_list,table)
 
+
 ### replace the exp with NULL if its table name is not the specified one.
 
 def __gen_func_exp__(exp,table_name):
@@ -895,7 +901,7 @@ def __join_gen_mr__(tree,fo):
 	if tree.join_explicit is True:
 		__get_join_key__(tree.join_condition.on_condition_exp,left_key_list,"LEFT")
 		__get_join_key__(tree.join_condition.on_condition_exp,right_key_list,"RIGHT")
-	elif tree.where_condition is not None:
+	else:
 		__get_join_key__(tree.join_condition.where_condition_exp,left_key_list,"LEFT")
 		__get_join_key__(tree.join_condition.where_condition_exp,right_key_list,"RIGHT")
 
@@ -1050,6 +1056,8 @@ def __join_gen_mr__(tree,fo):
 	print >>fo,"\t\t\t}\n" ### end of while
 
 
+	print >>fo,"\t\t\tNullWritable key_op = NullWritable.get();"
+
 	buf_dict = {}
 	left_line_buffer = "left_buf"
 	right_line_buffer = "right_buf"
@@ -1075,7 +1083,6 @@ def __join_gen_mr__(tree,fo):
 				
 				print >>fo,"\t\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n" 
 
-				print >>fo,"\t\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
 
 				tmp_output = "output.collect("
 
@@ -1093,7 +1100,6 @@ def __join_gen_mr__(tree,fo):
 				if tree.select_list is None:
 					print 1/0
 
-				print >>fo,"\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
 				tmp_output = "output.collect("
 
 				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
@@ -1124,8 +1130,6 @@ def __join_gen_mr__(tree,fo):
 
 				print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n" 
 
-				print >>fo,"\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
-
 				tmp_output = "output.collect("
 
 				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
@@ -1140,7 +1144,6 @@ def __join_gen_mr__(tree,fo):
 
 				
 			else:
-				print >>fo,"\t\t\t\t\tNullWritable key_op = NullWritable.get();"
 				tmp_output = "output.collect("
 				tmp_output += "key_op"
 				tmp_output += ","
@@ -1164,10 +1167,10 @@ def __join_gen_mr__(tree,fo):
 
 	else:
 		print >>fo,"\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
+		print >>fo,"\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
 		
 		print >>fo,"\t\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
 
-		print >>fo,"\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
 		print >>fo,"\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(j)).split(\"\\\|\");"
 
 		reduce_key = __gen_mr_value__(tree.select_list.tmp_exp_list[:1],reduce_key_type,buf_dict)
@@ -1178,7 +1181,6 @@ def __join_gen_mr__(tree,fo):
 			
 			print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n" 
 
-			print >>fo,"\t\t\t\t\t\tNullWritable key_op = NullWritable.get();"
 
 			tmp_output = "output.collect("
 
@@ -1197,7 +1199,6 @@ def __join_gen_mr__(tree,fo):
 			if tree.select_list is None:
 				print 1/0
 
-			print >>fo,"\t\t\t\t\tNullWritable key_op = NullWritable.get();"
 			tmp_output = "output.collect("
 
 			#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
