@@ -50,9 +50,9 @@ class YExpTool:
             elif atn == "NUMBER":
                 return YConsExp(atc, "DECIMAL")
             elif atn == "QUOTED_STRING":
-		atc.lstrip("'")
-		atc.rstrip("'")
-		atc = "\"" + atc + "\""
+                atc = atc.lstrip("'")
+                atc = atc.rstrip("'")
+                atc = "\"" + atc + "\""
                 return YConsExp(atc, "TEXT")
             elif atn == "T_RESERVED" and atc.upper() == "NULL":
                 return YConsExp(atc, "NULL")
@@ -316,10 +316,10 @@ class YExpBase:
     exp_type = None
 
     def __init__(self):
-	pass
+        pass
 
     def evaluate(self):
-   	pass 
+        pass 
 
 class YFuncExp(YExpBase):
 
@@ -333,7 +333,7 @@ class YFuncExp(YExpBase):
         self.func_name = input_func_name.upper()
         self.parameter_list = input_parameter_list
         self.convert_to_upper()
-	self.gen_col_obj(self)
+        self.gen_col_obj(self)
 
 
     def evaluate(self):
@@ -348,24 +348,24 @@ class YFuncExp(YExpBase):
         return self.func_name + "(" + ps + ")"
 
     def gen_col_obj(self,obj):
-	self.func_obj = obj
-	for x in self.parameter_list:
-		x.gen_col_obj(self) 
+        self.func_obj = obj
+        for x in self.parameter_list:
+            x.gen_col_obj(self) 
 
     def convert_to_upper(self):
 
-	for x in self.parameter_list:
-		x.convert_to_upper()
+        for x in self.parameter_list:
+            x.convert_to_upper()
 
     def has_groupby_func(self):
-	res =False
+        res =False
 
-	if self.func_name in agg_func_list:
-		return True
+        if self.func_name in agg_func_list:
+            return True
 
-	for x in self.parameter_list:
-		res = res | x.has_groupby_func()
-	return res
+        for x in self.parameter_list:
+            res = res | x.has_groupby_func()
+        return res
 
 
 class YConsExp(YExpBase):
@@ -383,13 +383,13 @@ class YConsExp(YExpBase):
         return self.cons_value
 
     def gen_col_obj(self,func_obj):
-	return
+        return
 
     def convert_to_upper(self):
-	pass
+        pass
   
     def has_groupby_func(self):
-	return False
+        return False
 
 
 class YRawColExp(YExpBase):
@@ -404,8 +404,8 @@ class YRawColExp(YExpBase):
 
         self.table_name = input_table_name.upper()
         self.column_name = str(input_column_name).upper()
-	self.column_type = None
-	self.func_obj = None
+        self.column_type = None
+        self.func_obj = None
 
     def evaluate(self):
         if self.table_name == "":
@@ -413,15 +413,15 @@ class YRawColExp(YExpBase):
         return self.table_name + "." + str(self.column_name)
 
     def gen_col_obj(self,func_obj):
-	self.func_obj = func_obj
+        self.func_obj = func_obj
 
     def convert_to_upper(self):
 ### the column_name can be either string  or number (index)
-	self.column_name = str(self.column_name).upper()
-	self.table_name = self.table_name.upper()
+        self.column_name = str(self.column_name).upper()
+        self.table_name = self.table_name.upper()
 
     def has_groupby_func(self):
-	return False
+        return False
 
 
 ############################################################################################
@@ -430,29 +430,183 @@ class YRawColExp(YExpBase):
 ############################################################################################
 ############################################################################################
 
-
-class GroupByNode:
-
+#Sub-types could be: TableNode, SelectProjectNode, GroupByNode, OrderByNode, TwoJoinNode, MultipleJoinNode
+class QueryPlanTreeBase(object):
+    
     source = None
-    i_am_thee_tree = None
+    i_am_the_tree = None
 
     select_list = None
-
-    table_list = []
-    table_alias_dict = {}
     
-    #A GroupByNode node can get where_condition from its parents
+    #Not all nodes can have where_condition
+    #but, a GroupByNode node can get where_condition from its parents
     where_condition = None
 
     group_by_clause = None
 
+    having_clause = None
+    order_by_clause = None
+
+    table_list = []
+    table_alias_dict = {}
+
+
+    def __init__(self):
+        print "QueryPlanTreeBase __init__"
+
+        self.table_list = []
+        self.table_alias_dict = {}
+
+    def release_order_by(self):
+        print "QueryPlanTreeBase release_order_by"
+
+        if self.order_by_clause is not None:
+            ob = OrderByNode()
+            ob.source = self.source
+            ob.i_am_the_tree = self.i_am_the_tree
+            ob.select_list = None #or self.select_list? to be done!
+
+            ob.order_by_clause = self.order_by_clause
+            self.order_by_clause = None
+
+            #YuanYuan: I here do not handle table_list
+
+            ob.child = self
+            return ob
+        else:
+            return self
+
+
+    def release_group_by(self):
+        print "QueryPlanTreeBase release_group_by"
+
+        if self.group_by_clause is not None:
+
+            gb = GroupByNode()
+            gb.source = self.source
+            gb.i_am_the_tree = self.i_am_the_tree
+
+            gb.select_list = copy.deepcopy(self.select_list)
+
+            gb.group_by_clause = self.group_by_clause
+            self.group_by_clause = None
+
+
+            if self.having_clause is not None:
+                gb.having_clause = self.having_clause
+                self.having_clause = None
+
+            gb.child = self
+            
+            for x in self.table_list:
+                if x not in gb.table_list:
+                        gb.table_list.append(x)
+            gb.table_alias_dict = self.table_alias_dict
+
+            return gb
+
+        else:
+            if self.select_list is None:
+                return self
+
+            select_dict = self.select_list.dict_exp_and_alias
+
+            agg_bool = False
+
+            for x in select_dict.keys():
+                agg_bool = agg_bool | x.has_groupby_func()
+
+            if agg_bool is False:
+                return self
+        
+            gb = GroupByNode()
+            gb.source = self.source
+            gb.i_am_the_tree = self.i_am_the_tree
+
+            gb.select_list = copy.deepcopy(self.select_list)
+            gb.group_by_clause = FirstStepGroupBy(None)
+            gb_exp = YConsExp(1,"INTEGER")
+            gb.group_by_clause.groupby_exp_list.append(gb_exp)
+            self.group_by_clause = None
+
+            for x in self.table_list:
+                if x not in gb.table_list:
+                    gb.table_list.append(x)
+            gb.table_alias_dict = self.table_alias_dict
+
+            gb.child = self
+
+            return gb
+
+    
+    def convert_to_binary_join_tree(self):
+        print "QueryPlanTreeBase convert_to_binary_join_tree"
+
+        return self
+
+
+    def debug(self, level):
+        print "QueryPlanTreeBase debug"
+
+class OrderByNode(QueryPlanTreeBase):
+    child = None
+
+    def __init__(self):
+        print "OrderByNode init..."
+        super(OrderByNode, self).__init__()
+
+    def release_order_by(self):
+        print "WRONG"
+        print 1 / 0
+
+    def release_group_by(self):
+        self.child = self.child.release_group_by()
+        return super(OrderByNode, self).release_group_by()
+
+    def convert_to_binary_join_tree(self):
+        self.child = self.child.convert_to_binary_join_tree()
+        return super(OrderByNode, self).convert_to_binary_join_tree()
+
+    def debug(self, level):
+        pb = ""
+        for i in range(level):
+            pb += "    "
+
+        xes = ""
+        for x in self.order_by_clause.orderby_exp_list:
+            xes = xes + x.evaluate()
+            xes = xes + ","
+
+        i = ""
+        for y in self.order_by_clause.order_indicator_list:
+            i = i + y
+            i = i + ","
+            
+        print pb, "OrderByNode", "[" + xes + "]", "[" + i + "]"
+
+
+        self.child.debug(level + 1)
+
+class GroupByNode(QueryPlanTreeBase):
+
     child = None
     
     def __init__(self):
-        a = 1
-	self.table_list = []
-	self.table_alias_dict = {}
-        
+        print "GroupByNode init..."
+        super(GroupByNode, self).__init__()
+
+    def release_order_by(self):
+        print "WRONG"
+        print 1 / 0
+
+    def release_group_by(self):
+        print "WRONG"
+        print 1 / 0
+
+    def convert_to_binary_join_tree(self):
+        self.child = self.child.convert_to_binary_join_tree()
+        return super(GroupByNode, self).convert_to_binary_join_tree()
+
     def debug(self, level):
 
         pb = ""
@@ -463,38 +617,46 @@ class GroupByNode:
             sscs = str(None)
         else:
             sscs = self.select_list.converted_exp_str
-        
 
-        print pb, "GroupByNode", "[" + sscs + "]", "[" + self.group_by_clause.converted_exp_str + "]"
+        hs = ""
+        if self.having_clause is not None:
+            hs = self.having_clause.where_condition_exp.evaluate()
+
+        print pb, "GroupByNode", "[" + sscs + "]", "[" + self.group_by_clause.converted_exp_str + "]", "[" + hs + "]"
         self.child.debug(level + 1)
 
-    def convert_to_binary_join_tree(self):
-        self.child = self.child.convert_to_binary_join_tree()
-        return self
 
-class SelectProjectNode:
-
-    source = None
-    i_am_the_tree = None
-
-    select_list = None
-    where_condition = None
-    group_by_clause = None
+class SelectProjectNode(QueryPlanTreeBase):
 
     child = None
     table_alias = None
 
-    table_list = []
-    table_alias_dict = {}
     in_table_list = []
     in_table_alias_dict = {}
 
     def __init__(self):
+        print "SelectProjectNode init..."
         
-	self.table_list = []
-	self.table_alias_dict = {}
-	self.in_table_list = []
-	self.in_table_alias_dict = {}
+        self.in_table_list = []
+        self.in_table_alias_dict = {}
+
+        super(SelectProjectNode, self).__init__()
+
+    def release_order_by(self):
+        self.child = self.child.release_order_by()
+
+        return super(SelectProjectNode,self).release_order_by()
+        
+    def release_group_by(self):
+        self.child = self.child.release_group_by()
+
+        return super(SelectProjectNode,self).release_group_by()
+
+    def convert_to_binary_join_tree(self):
+        self.child = self.child.convert_to_binary_join_tree()
+
+        return super(SelectProjectNode,self).convert_to_binary_join_tree()
+
 
     def debug(self, level):
 
@@ -519,89 +681,16 @@ class SelectProjectNode:
         self.child.debug(level + 1)
 
 
-    def release_group_by(self):
-
-        self.child = self.child.release_group_by()
-
-        if self.group_by_clause is not None:
-
-            gb = GroupByNode()
-            gb.source = self.source
-            gb.i_am_thee_tree = self.i_am_the_tree
-
-            gb.select_list = copy.deepcopy(self.select_list)
-
-            gb.group_by_clause = self.group_by_clause
-            self.group_by_clause = None
-
-            gb.child = self
-	    
-	    for x in self.table_list:
-		if x not in gb.table_list:
-			gb.table_list.append(x)
-	    gb.table_alias_dict = self.table_alias_dict
-
-            return gb
-
-	else:
-		if self.select_list is None:
-			return self
-
-		select_dict = self.select_list.dict_exp_and_alias
-
-		agg_bool = False
-
-		for x in select_dict.keys():
-			agg_bool = agg_bool | x.has_groupby_func()
-
-		if agg_bool is False:
-			return self
-	
-		gb = GroupByNode()
-		gb.source = self.source
-		gb.i_am_thee_tree = self.i_am_the_tree
-
-		gb.select_list = copy.deepcopy(self.select_list)
-		gb.group_by_clause = FirstStepGroupBy(None)
-		gb_exp = YConsExp(1,"INTEGER")
-		gb.group_by_clause.groupby_exp_list.append(gb_exp)
-		self.group_by_clause = None
-
-		for x in self.table_list:
-			if x not in gb.table_list:
-				gb.table_list.append(x)
-		gb.table_alias_dict = self.table_alias_dict
-
-		gb.child = self
-
-		return gb
-
-
-    def convert_to_binary_join_tree(self):
-        self.child = self.child.convert_to_binary_join_tree()
-        return self
         
-class TableNode:
+class TableNode(QueryPlanTreeBase):
 
-
-    source = None
-    i_am_the_tree = None
-
-    select_list = None
-    where_condition = None
-    group_by_clause = None
-
-    table_list = []
-    table_alias_dict = {}
 
     table_name = None
     table_alias = None
 
     def __init__(self):
-        self.table_list = []
-	self.table_alias_dict = {}
-
-
+        print "TableNode init..."
+        super(TableNode, self).__init__()
 
     def debug(self, level):
 
@@ -630,73 +719,7 @@ class TableNode:
         print pb, "TableNode", self.table_name, "{" + self.table_alias + "}", tmp_str_select_list, tmp_str_where_condition
 
 
-    def release_group_by(self):
-
-        if self.group_by_clause is not None:
-
-            gb = GroupByNode()
-            gb.source = self.source
-            gb.i_am_thee_tree = self.i_am_the_tree
-
-            gb.select_list = copy.deepcopy(self.select_list)
-##fix me:
-            #self.select_list = None
-
-            gb.group_by_clause = self.group_by_clause
-            self.group_by_clause = None
-
-	    for x in self.table_list:
-		if x not in gb.table_list:
-			gb.table_list.append(x)
-	    gb.table_alias_dict = self.table_alias_dict
-	
-            gb.child = self
-
-            return gb
-	
-	else:
-		if self.select_list is None:
-			return self
-
-		select_dict = self.select_list.dict_exp_and_alias
-
-		agg_bool = False
-
-		for x in select_dict.keys():
-			agg_bool = agg_bool | x.has_groupby_func()
-
-		if agg_bool is False:
-			return self
-	
-		gb = GroupByNode()
-		gb.source = self.source
-		gb.i_am_thee_tree = self.i_am_the_tree
-
-		gb.select_list = copy.deepcopy(self.select_list)
-		gb.group_by_clause = FirstStepGroupBy(None)
-		gb_exp = YConsExp(1,"INTEGER")
-		gb.group_by_clause.groupby_exp_list.append(gb_exp)
-		self.group_by_clause = None
-
-		for x in self.table_list:
-			if x not in gb.table_list:
-				gb.table_list.append(x)
-		gb.table_alias_dict = self.table_alias_dict
-
-		gb.child = self
-
-		return gb
-			
-
-    def convert_to_binary_join_tree(self):
-        return self
-
-
-class TwoJoinNode:
-    source = None
-
-    select_list = None
-    where_condition = None
+class TwoJoinNode(QueryPlanTreeBase):
 
     join_explicit = None
     join_type = None 
@@ -705,12 +728,22 @@ class TwoJoinNode:
     left_child = None
     right_child = None
 
-    table_list = []
-    table_alias_dict = {}
-
     def __init__(self):
-        self.table_list = []
-	self.table_alias_dict = {}
+        print "TwoJoinNode init..."
+        super(TwoJoinNode, self).__init__()
+
+
+    def release_order_by(self):
+        print "WRONG"
+        print 1 / 0
+
+    def release_group_by(self):
+        print "WRONG"
+        print 1 / 0
+
+    def convert_to_binary_join_tree(self):
+        print "WRONG"
+        print 1 / 0
 
 
     def debug(self, level):
@@ -749,50 +782,36 @@ class TwoJoinNode:
         self.right_child.debug(level + 1)
 
 #useless once we have TwoJoinNode
-class MultipleJoinNode:
-
-    source = None
-    i_am_the_tree = None
-
-    select_list = None
-    where_condition = None
-    group_by_clause = None
+class MultipleJoinNode(QueryPlanTreeBase):
 
     join_explicit = None
     join_info = None
     children_list = None
 
-    table_list = []
-    table_alias_dict = {}
-
     def __init__(self):
-	self.table_list = []
-	self.table_alias_dict = {}
+        print "MultipleJoinNode init..."
+        super(MultipleJoinNode, self).__init__()
+        
 
-    def debug(self, level):
+    def release_order_by(self):
 
-        pb = ""
-        for i in range(level):
-            pb += "    "
+        tmp_list = self.children_list
+        self.children_list = []
 
+        for a_child in tmp_list:
+            self.children_list.append(a_child.release_order_by())
+        
+        return super(MultipleJoinNode,self).release_order_by()
 
-        if self.select_list is None:
-            sscs = str(None)
-        else:
-            sscs = self.select_list.converted_str
+    def release_group_by(self):
 
+        tmp_list = self.children_list
+        self.children_list = []
 
-        if self.where_condition is None:
-            swc = str(None)
-        else:
-            swc = self.where_condition.converted_str
+        for a_child in tmp_list:
+            self.children_list.append(a_child.release_group_by())
 
-
-
-        print pb, "MultipleJoinNode", "[" + sscs + "]", "[" + swc + "]"
-        for a_child in self.children_list:
-            a_child.debug(level + 1)
-
+        return super(MultipleJoinNode,self).release_group_by()
 
     def convert_to_binary_join_tree(self):
 
@@ -828,23 +847,23 @@ class MultipleJoinNode:
                     a_join_node.left_child = copy.deepcopy(current_node)
                     a_join_node.right_child = copy.deepcopy(a_child)
 
-	    	    for x in current_node.table_list:
-			if x not in a_join_node.table_list:
-				a_join_node.table_list.append(x)
-		    a_join_node.table_alias_dict = current_node.table_alias_dict
+                    for x in current_node.table_list:
+                        if x not in a_join_node.table_list:
+                            a_join_node.table_list.append(x)
+                    a_join_node.table_alias_dict = current_node.table_alias_dict
 
 
-		    for x in a_child.table_alias_dict.keys():
-			if x not in a_join_node.table_alias_dict.keys():
-				a_join_node.table_alias_dict[x] = a_child.table_alias_dict[x]
-			else:
-				print "FUck"
-				print 1/0
+                    for x in a_child.table_alias_dict.keys():
+                        if x not in a_join_node.table_alias_dict.keys():
+                            a_join_node.table_alias_dict[x] = a_child.table_alias_dict[x]
+                        else:
+                            print "FUck"
+                            print 1/0
 
 
-		    for x in a_child.table_list:
-			if x not in a_join_node.table_list:
-				a_join_node.table_list.append(x)
+                    for x in a_child.table_list:
+                        if x not in a_join_node.table_list:
+                            a_join_node.table_list.append(x)
                     
                     if self.join_explicit == True:
 
@@ -867,66 +886,30 @@ class MultipleJoinNode:
 
             return current_node
 
+    def debug(self, level):
 
-    def release_group_by(self):
+        pb = ""
+        for i in range(level):
+            pb += "    "
 
-        tmp_list = self.children_list
-        self.children_list = []
 
-        for a_child in tmp_list:
-            self.children_list.append(a_child.release_group_by())
+        if self.select_list is None:
+            sscs = str(None)
+        else:
+            sscs = self.select_list.converted_str
 
-        if self.group_by_clause is not None:
 
-            gb = GroupByNode()
-            gb.source = self.source
-            gb.i_am_thee_tree = self.i_am_the_tree
+        if self.where_condition is None:
+            swc = str(None)
+        else:
+            swc = self.where_condition.converted_str
 
-            gb.select_list = copy.deepcopy(self.select_list)
 
-            gb.group_by_clause = self.group_by_clause
-            self.group_by_clause = None
 
-            gb.child = self
-	    for x in self.table_list:
-		if x not in gb.table_list:
-			gb.table_list.append(x)
-	    gb.table_alias_dict = self.table_alias_dict
+        print pb, "MultipleJoinNode", "[" + sscs + "]", "[" + swc + "]"
+        for a_child in self.children_list:
+            a_child.debug(level + 1)
 
-            return gb
-
-	else:
-		if self.select_list is None:
-			return self
-
-		select_dict = self.select_list.dict_exp_and_alias
-
-		agg_bool = False
-
-		for x in select_dict.keys():
-			agg_bool = agg_bool | x.has_groupby_func()
-
-		if agg_bool is False:
-			return self
-	
-		gb = GroupByNode()
-		gb.source = self.source
-		gb.i_am_thee_tree = self.i_am_the_tree
-
-		gb.select_list = copy.deepcopy(self.select_list)
-		gb.group_by_clause = FirstStepGroupBy(None)
-		gb_exp = YConsExp(1,"INTEGER")
-		gb.group_by_clause.groupby_exp_list.append(gb_exp)
-		self.group_by_clause = None
-
-		for x in self.table_list:
-			if x not in gb.table_list:
-				gb.table_list.append(x)
-		gb.table_alias_dict = self.table_alias_dict
-
-		gb.child = self
-
-		return gb
     
 ############################################################################################
 ############################################################################################
@@ -942,6 +925,9 @@ class LRBSelectNode:
     where_condition = None
     from_list = None
     group_by_clause = None
+
+    having_clause = None
+    order_by_clause = None
 
     converted_from_list = None
 
@@ -961,21 +947,23 @@ class LRBSelectNode:
             #tn should be a simple tablescan
             tn = TableNode()
             tn.source = a_input
-            tn.i_am_thee_tree = i_am_the_tree
+            tn.i_am_the_tree = i_am_the_tree
 
             if i_am_the_tree:
                 tn.select_list = self.select_list
                 tn.where_condition = self.where_condition
                 tn.group_by_clause = self.group_by_clause
+                tn.having_clause = self.having_clause
+                tn.order_by_clause = self.order_by_clause
 
             tn.table_name = a_input["content"].upper()
             tn.table_alias = a_input["alias"].upper()
-	    
-	    if tn.table_alias == "":
-		tn.table_list.append(tn.table_name)
-	    else:
-		tn.table_list.append(tn.table_alias)
-		tn.table_alias_dict[tn.table_alias] = tn.table_name
+            
+            if tn.table_alias == "":
+                tn.table_list.append(tn.table_name)
+            else:
+                tn.table_list.append(tn.table_alias)
+                tn.table_alias_dict[tn.table_alias] = tn.table_name
             
 
         elif a_input["type"] == 'SubQuery':
@@ -983,25 +971,28 @@ class LRBSelectNode:
             #tn should have two nodes: a SP and its underlying child
             tn = SelectProjectNode()
             tn.source = a_input
-            tn.i_am_thee_tree = i_am_the_tree
+            tn.i_am_the_tree = i_am_the_tree
             
             if i_am_the_tree:
                 tn.select_list = self.select_list
                 tn.where_condition = self.where_condition
                 tn.group_by_clause = self.group_by_clause
+                tn.having_clause = self.having_clause
+                tn.order_by_clause = self.order_by_clause
+                
 
             tn.child = a_input["content"].convert_to_initial_query_plan_tree()
             tn.table_alias = a_input["alias"]
-	    if tn.table_alias is not None:
-		tn.table_alias = tn.table_alias.upper()
+            if tn.table_alias is not None:
+                tn.table_alias = tn.table_alias.upper()
 
 
-	    if tn.table_alias is not None and tn.table_alias not in tn.table_list:
-	    	tn.table_list.append(tn.table_alias)
+            if tn.table_alias is not None and tn.table_alias not in tn.table_list:
+                tn.table_list.append(tn.table_alias)
 
 
 ##
-##	construct the project list
+##      construct the project list
 ##
 
         elif a_input["type"] == 'JoinClause':
@@ -1009,7 +1000,7 @@ class LRBSelectNode:
             #tn should be a multiple Join
             tn = MultipleJoinNode()
             tn.source = a_input
-            tn.i_am_thee_tree = i_am_the_tree
+            tn.i_am_the_tree = i_am_the_tree
 
 
             #Step0: setup basic information
@@ -1017,7 +1008,10 @@ class LRBSelectNode:
             if i_am_the_tree:
                 tn.select_list = self.select_list
                 tn.where_condition = self.where_condition
-                tn.group_by_clause = self.group_by_clause              
+                tn.group_by_clause = self.group_by_clause
+                tn.having_clause = self.having_clause
+                tn.order_by_clause = self.order_by_clause
+
 
             #Step1: setup children list
             tmp_child_list = []
@@ -1062,24 +1056,26 @@ class LRBSelectNode:
             final_node.select_list = self.select_list
             final_node.where_condition = self.where_condition
             final_node.group_by_clause = self.group_by_clause
+            final_node.having_clause = self.having_clause
+            final_node.order_by_clause = self.order_by_clause
 
             # Step1: set up children
             tmp_list = []
             for a_scfl_item in scfl:
                 
                 result_item = self.utility_convert_to_initial_plan_tree(a_scfl_item, False)
-			
+                        
                 tmp_list.append(result_item)
-		for x in result_item.table_alias_dict.keys():
-			if x not in final_node.table_alias_dict.keys():
-				final_node.table_alias_dict[x] = result_item.table_alias_dict[x]
-			else:
-				print "FUck"
-				print 1/0
+                for x in result_item.table_alias_dict.keys():
+                    if x not in final_node.table_alias_dict.keys():
+                        final_node.table_alias_dict[x] = result_item.table_alias_dict[x]
+                    else:
+                        print "FUck"
+                        print 1/0
 
-		for x in result_item.table_list:
-			if x not in final_node.table_list:
-				final_node.table_list.append(x)
+                for x in result_item.table_list:
+                    if x not in final_node.table_list:
+                        final_node.table_list.append(x)
 
             final_node.children_list = list(tmp_list)
                 
@@ -1475,8 +1471,8 @@ class FirstStepSelectList:
 
     def utility_convert_exp_list_to_str(self, input_exp):
 
-	if input_exp is None:
-		return str(None)
+        if input_exp is None:
+                return str(None)
         s = ""
         for x in input_exp:
             t_alias = str(self.dict_exp_and_alias[x])
@@ -1600,10 +1596,10 @@ class FirstStepWhereCondition:
                 return "<"
             elif where_condition_item.tokenname == 'NOT_EQ':
                 return "<>"
-	    elif where_condition_item.tokenname == "GEQ":
-		return ">="
-	    elif where_condition_item.tokenname == "LEQ":
-		return "<="	
+            elif where_condition_item.tokenname == "GEQ":
+                return ">="
+            elif where_condition_item.tokenname == "LEQ":
+                return "<="     
             else:
                 return where_condition_item.content
               
@@ -1806,8 +1802,8 @@ class FirstStepGroupBy:
 
     def utility_convert_exp_list_to_str(self, input_exp):
         s = ""
-	if input_exp is None:
-		return s
+        if input_exp is None:
+                return s
         for x in input_exp:
             t_str = x.evaluate()
             s = s + "(" + t_str + ")" 
@@ -1824,6 +1820,98 @@ class FirstStepGroupBy:
         self.groupby_exp_list = self.utility_convert_group_by_to_exp_list(self.source)
         self.converted_exp_str = self.utility_convert_exp_list_to_str(self.groupby_exp_list)
 
+
+
+class FirstStepOrderBy:
+
+    source = None
+    converted_str = None
+    converted_exp_str = None
+
+    
+    orderby_exp_list = None
+
+    #Asc or Desc
+    order_indicator_list = None
+
+
+    def utility_convert_order_by_to_exp_list(self, order_by_clause):
+        
+        if order_by_clause is None:
+            return []
+
+        first_order_by_list = order_by_clause.child_list[2:]
+        
+        real_order_by_list = []
+
+        a_order_by_item = []
+        for eachitem in first_order_by_list:
+            
+            #todo: we don't consider ORDER BY myfunc(a,b)! 
+
+            if eachitem.tokenname != 'COMMA':
+
+                a_token = {}
+                a_token["name"] = eachitem.tokenname
+                a_token["content"] = eachitem.content
+                
+                a_order_by_item.append(a_token)
+
+            else:
+                #we get an item in Order By clause (to be polished...)
+
+                #now we copy a new one. But why?
+                new_one = []
+                for x in a_order_by_item:
+                    new_one.append(x)
+
+                real_order_by_list.append(new_one)
+
+                a_order_by_item = []
+        
+
+        real_order_by_list.append(a_order_by_item)
+
+        return_exp_list = []
+        tmp_order_indicator_list = []
+        
+        yet = YExpTool()
+
+        for a_order_by_item in real_order_by_list:
+            
+            #we must handle the order indicator: DESC or ASC
+            a_order_indicator = None
+            if a_order_by_item[-1]["name"] == 'T_RESERVED':
+                a_order_indicator = a_order_by_item[-1]["content"].upper()
+                a_final_item = a_order_by_item[:-1]
+            else:
+                #default 'ASC'
+                a_order_indicator = 'ASC'
+                a_final_item = a_order_by_item
+            print a_order_indicator
+            
+            tmp_order_indicator_list.append(a_order_indicator)
+
+            return_exp_list.append(yet.convert_token_list_to_exp_tree(a_final_item))
+
+        
+        self.order_indicator_list = tmp_order_indicator_list
+
+        return return_exp_list
+
+        
+
+
+    def __init__(self, input_order_by):
+        self.source = input_order_by
+
+        #self.converted_str = self.utility_convert_order_by_to_str(self.source)
+
+
+        self.order_indicator_list = []
+        self.orderby_exp_list = self.utility_convert_order_by_to_exp_list(self.source)
+        
+        #self.converted_exp_str = self.utility_convert_exp_list_to_str(self.orderby_exp_list)
 
 
 
@@ -1857,6 +1945,19 @@ def convert_a_select_tree(a_s_select_node):
             #result.group_by_clause = t_child
             result.group_by_clause = FirstStepGroupBy(t_child)
             continue
+
+        if t_child.tokenname == 'T_HAVING':
+            result.having_clause= FirstStepWhereCondition(t_child)
+            continue
+
+
+        if t_child.tokenname == 'T_ORDER_BY_CLAUSE':
+            result.order_by_clause = FirstStepOrderBy(t_child)
+            continue
+
+        
+
+        
 
         if t_child.tokenname == 'T_FROM':
 
@@ -1962,29 +2063,29 @@ def processNode(node):
 ############################################################################################
 
 def column_unique_in_table(column_name,table_name):
-	if table_name not in global_table_dict.keys():
-		return False
+    if table_name not in global_table_dict.keys():
+        return False
 
-	count =0
-	for x in global_table_dict[table_name].column_list:
-		if x.column_name == column_name:
-			count = count +1
-
-	if count ==1:
-		return True
-	else:
-		return False
+    count =0
+    for x in global_table_dict[table_name].column_list:
+        if x.column_name == column_name:
+            count = count +1
+            
+    if count ==1:
+        return True
+    else:
+        return False
 
 ## input: column_name and table_name
 ## return: if the table exists and has a column named column_name, return true. otherwise false
 def column_in_table(column_name,table_name):
-	if table_name not in global_table_dict.keys():
-		return False
+    if table_name not in global_table_dict.keys():
+        return False
 
-	for x in global_table_dict[table_name].column_list:
-		if x.column_name == column_name:
-			return True
-	return False	
+    for x in global_table_dict[table_name].column_list:
+        if x.column_name == column_name:
+            return True
+    return False    
 
 
 def lookup_a_table(input_table_name):
@@ -2002,13 +2103,13 @@ def lookup_a_column(input_column_name):
 
     for x in global_table_dict.keys():
         for ac in global_table_dict[x].column_list:
-	    if input_column_name == "*":
-		tmp = copy.deepcopy(ac)
-		return_list.append(tmp)
-		continue
+            if input_column_name == "*":
+                tmp = copy.deepcopy(ac)
+                return_list.append(tmp)
+                continue
 
             if ac.column_name == input_column_name:
-		tmp = copy.deepcopy(ac)
+                tmp = copy.deepcopy(ac)
                 return_list.append(tmp)
 
     return return_list
@@ -2062,13 +2163,13 @@ class TableSchema:
             return self.column_name_list.index(input_name)
 
     def get_column_type_by_name(self, input_name):
-		index = self.get_column_index_by_name(input_name)
-		if index != -1:
-			return self.column_list[index].column_type
-		else:
-			return None
+        index = self.get_column_index_by_name(input_name)
+        if index != -1:
+            return self.column_list[index].column_type
+        else:
+            return None
 
-def execute_sql_in_a_file(filename):
+def get_the_select_node_from_a_file(filename):
 
     doc = minidom.parse(filename)
 
@@ -2081,13 +2182,22 @@ def execute_sql_in_a_file(filename):
         if child.nodeName == 'node':
             a_query_node = processNode(child)
             break
-                
+
+
+    return a_query_node
+
+
+#This function processes a T_SELECT node
+def build_plan_tree_from_a_select_node(a_query_node):
+    
     r = convert_a_select_tree(a_query_node)
     r.process_from_list()
 
-    initial_tree = r.convert_to_initial_query_plan_tree()
+    t0 = r.convert_to_initial_query_plan_tree()
 
-    t2 = initial_tree.release_group_by()
+    t1 = t0.release_order_by()
+
+    t2 = t1.release_group_by()
 
     t3 = t2.convert_to_binary_join_tree()
     
@@ -2146,7 +2256,6 @@ def debug_global_tables():
     for t in tl:
         print t.table_schema.table_name
 
-
 ##########################################################
 #
 #     Added by YY
@@ -2155,1739 +2264,1742 @@ def debug_global_tables():
 
 def __check_column__(exp,table_list,table_alias_dict):
 
-	if isinstance(exp,YRawColExp):
-		if exp.table_name != "":
-			if exp.table_name not in table_list and exp.table_name not in table_alias_dict.keys():
-				return -1
+    if isinstance(exp,YRawColExp):
+        if exp.table_name != "":
+            if exp.table_name not in table_list and exp.table_name not in table_alias_dict.keys():
+                return -1
 
-			elif exp.column_name == '*':
-				return 0
-			else:
-				tmp_name = None
-				if exp.table_name in table_alias_dict.keys():
-					tmp_name = table_alias_dict[exp.table_name]
-				else:
-					tmp_name = exp.table_name
+            elif exp.column_name == '*':
+                return 0
+            else:
+                tmp_name = None
+                if exp.table_name in table_alias_dict.keys():
+                    tmp_name = table_alias_dict[exp.table_name]
+                else:
+                    tmp_name = exp.table_name
 
-				if column_unique_in_table(exp.column_name,tmp_name) is False:
-					return -1
-			
+                if column_unique_in_table(exp.column_name,tmp_name) is False:
+                    return -1
+            
 
-		elif exp.column_name == '*':
-			return 0
-		else:
-			count = 0
-			
-			tmp_name = None
-			table_name = None
-			for x in table_list:
-				if x in table_alias_dict.keys():
-					tmp_name = table_alias_dict[x]
-				else:
-					tmp_name = x
-				if column_in_table(exp.column_name,tmp_name):
-					table_name = tmp_name
-					count = count +1
-			if count !=1:
-				return -1
+        elif exp.column_name == '*':
+            return 0
+        else:
+            count = 0
+            
+            tmp_name = None
+            table_name = None
+            for x in table_list:
+                if x in table_alias_dict.keys():
+                    tmp_name = table_alias_dict[x]
+                else:
+                    tmp_name = x
+                if column_in_table(exp.column_name,tmp_name):
+                    table_name = tmp_name
+                    count = count +1
+            if count !=1:
+                return -1
 
-			if column_unique_in_table(exp.column_name,table_name) is False:
-				return -1
+            if column_unique_in_table(exp.column_name,table_name) is False:
+                return -1
 
-	else:
-			return -1
+    else:
+            return -1
 
 
 def __check_func_para__(exp,table_list,table_alias_dict):
-	res = 0
-	func_dict = {									\
+    res = 0
+    func_dict = {                                                                   \
 ##
 ## the key is function name and for each function, there are three parameters: 
-##	1. number of parameters: 0 means any length that is greater than 0
-##	2. type of input parameters, this is a list
-##	3. type of return value, this is a list
+##      1. number of parameters: 0 means any length that is greater than 0
+##      2. type of input parameters, this is a list
+##      3. type of return value, this is a list
 ##
-			"SUM":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],		\
-			"COUNT":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],	\
-			"COUNT_DISTINCT":[1,["INTEGER","DECIMAL","TEXT","DATE"],["INTEGER"]],	\
-			"AVG":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],		\
-			"MAX":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],		\
-			"MIN":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],		\
-			"PLUS":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],		\
-			"MINUS":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],	\
-			"MULTIPLY":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],	\
-			"DIVIDE":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],	\
-			"AND":[0,["BOOLEAN"],["BOOLEAN"]],				\
-			"OR":[0,["BOOLEAN"],["BOOLEAN"]],				\
-			"GTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],		\
-			"LTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],		\
-			"EQ":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]],		\
-			"LEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],		\
-			"GEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],		\
-			"NOT_EQ":[2,["INTEGER","DECIMAL"],["BOOLEAN"]],			\
-			"IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]]
-		}
+            "SUM":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],          \
+            "COUNT":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],        \
+            "COUNT_DISTINCT":[1,["INTEGER","DECIMAL","TEXT","DATE"],["INTEGER"]],   \
+            "AVG":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],          \
+            "MAX":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],          \
+            "MIN":[1,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],          \
+            "PLUS":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],         \
+            "MINUS":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],        \
+            "MULTIPLY":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],     \
+            "DIVIDE":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],       \
+            "AND":[0,["BOOLEAN"],["BOOLEAN"]],                              \
+            "OR":[0,["BOOLEAN"],["BOOLEAN"]],                               \
+            "GTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
+            "LTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
+            "EQ":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]],               \
+            "LEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
+            "GEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
+            "NOT_EQ":[2,["INTEGER","DECIMAL"],["BOOLEAN"]],                 \
+            "IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]]
+        }
 
-	if isinstance(exp,YFuncExp):
-		if exp.func_name not in func_dict.keys():
-			return -1
+    if isinstance(exp,YFuncExp):
+        if exp.func_name not in func_dict.keys():
+            return -1
 
-		func_para_len = func_dict[exp.func_name][0]
-		if func_para_len == 0 and len(exp.parameter_list) == 0:
-			return -1
+        func_para_len = func_dict[exp.func_name][0]
+        if func_para_len == 0 and len(exp.parameter_list) == 0:
+            return -1
 
-		if func_para_len !=0 and func_para_len != len(exp.parameter_list):
-			return -1
+        if func_para_len !=0 and func_para_len != len(exp.parameter_list):
+            return -1
 
-		check_type = None
+        check_type = None
 
-		for para in exp.parameter_list:
-			if isinstance(para,YRawColExp):
-				res = __check_column__(para,table_list,table_alias_dict)
-				if res == -1 :
-					return res
+        for para in exp.parameter_list:
+            if isinstance(para,YRawColExp):
+                res = __check_column__(para,table_list,table_alias_dict)
+                if res == -1 :
+                    return res
 
-				if para.column_name == "*":
-					if exp.func_name == "COUNT" :
-						continue
-					else:
-						return -1
+                if para.column_name == "*":
+                    if exp.func_name == "COUNT" :
+                        continue
+                    else:
+                        return -1
 
-				column_type = None
-				tmp_column = lookup_a_column(para.column_name)
-				for tmp in tmp_column:
-					if tmp.table_schema.table_name in table_list :
-						column_type = tmp.table_schema.get_column_type_by_name(para.column_name)
-						break
-					if tmp.table_schema.table_name in table_alias_dict.values():
-						column_type = tmp.table_schema.get_column_type_by_name(para.column_name)
-						break
-				if column_type is not None:
-					if column_type not in func_dict[exp.func_name.upper()][1]: 
-						return -1
-					
-					if check_type is None:
-						check_type = column_type
+                column_type = None
+                tmp_column = lookup_a_column(para.column_name)
+                for tmp in tmp_column:
+                    if tmp.table_schema.table_name in table_list :
+                        column_type = tmp.table_schema.get_column_type_by_name(para.column_name)
+                        break
+                    if tmp.table_schema.table_name in table_alias_dict.values():
+                        column_type = tmp.table_schema.get_column_type_by_name(para.column_name)
+                        break
+                if column_type is not None:
+                    if column_type not in func_dict[exp.func_name.upper()][1]: 
+                        return -1
+                    
+                    if check_type is None:
+                        check_type = column_type
 
-					else:
-						if check_type  in ["INTEGER","DECIMAL"] and column_type  in ["INTEGER","DECIMAL"]:
-							continue
+                    else:
+                        if check_type  in ["INTEGER","DECIMAL"] and column_type  in ["INTEGER","DECIMAL"]:
+                            continue
 
-						elif check_type != column_type:
-							return -1
-				else:
-					return -1
+                        elif check_type != column_type:
+                            return -1
+                else:
+                    return -1
 
-			elif isinstance(para,YFuncExp):
-				res = __check_func_para__(para,table_list,table_alias_dict)
-				if res == -1 :
-					return -1 	
-			
-				return_type = func_dict[para.func_name.upper()][2]
-				for tmp in return_type:
-					if tmp not in func_dict[exp.func_name.upper()][1]:
-						return -1
+            elif isinstance(para,YFuncExp):
+                res = __check_func_para__(para,table_list,table_alias_dict)
+                if res == -1 :
+                    return -1       
+            
+                return_type = func_dict[para.func_name.upper()][2]
+                for tmp in return_type:
+                    if tmp not in func_dict[exp.func_name.upper()][1]:
+                        return -1
 
-				if check_type is None:
-					if len(return_type) >1:
-						check_type = "DECIMAL"
-					else:
-						check_type = return_type[0]
+                if check_type is None:
+                    if len(return_type) >1:
+                        check_type = "DECIMAL"
+                    else:
+                        check_type = return_type[0]
 
-				else:
-					if len(return_type) >1:
-						if check_type not in ["INTEGER","DECIMAL"]:
-							return -1
-					else:
-						if check_type != return_type[0]:
-							return -1
+                else:
+                    if len(return_type) >1:
+                        if check_type not in ["INTEGER","DECIMAL"]:
+                            return -1
+                    else:
+                        if check_type != return_type[0]:
+                            return -1
 
-			else:
-				if check_type is None:
-					check_type = para.cons_type
-				else:
-					if para.cons_type == "NULL":
-						continue
+            else:
+                if check_type is None:
+                    check_type = para.cons_type
+                else:
+                    if para.cons_type == "NULL":
+                        continue
 
-					if check_type in ["INTEGER","DECIMAL"] and para.cons_type in ["INTEGER","DECIMAL"]:
-						continue
+                    if check_type in ["INTEGER","DECIMAL"] and para.cons_type in ["INTEGER","DECIMAL"]:
+                        continue
 
-					if check_type != para.cons_type:
-						return -1
-			
-	else:
-		res = -1
+                    if check_type != para.cons_type:
+                        return -1
+            
+    else:
+        res = -1
 
-	return res
+    return res
 
 
 def __schema_select_list__(select_list,table_list,table_alias_dict):
-	res = 0
-	select_func_list = ["SUM","AVG","COUNT","MAX","MIN","PLUS","MINUS","DIVIDE","MULTIPLY"]
-	if select_list is None:
-		return res
+    res = 0
+    select_func_list = ["SUM","AVG","COUNT","MAX","MIN","PLUS","MINUS","DIVIDE","MULTIPLY"]
+    if select_list is None:
+        return res
 
-	for x in select_list.dict_exp_and_alias.keys():
-		if isinstance(x,YRawColExp):
-			res = __check_column__(x,table_list,table_alias_dict)
-			if res == -1:
-				return -1
+    for x in select_list.dict_exp_and_alias.keys():
+        if isinstance(x,YRawColExp):
+            res = __check_column__(x,table_list,table_alias_dict)
+            if res == -1:
+                return -1
 
-		elif isinstance(x, YFuncExp):
-			if x.func_name.upper() not in select_func_list:
-				return -1
+        elif isinstance(x, YFuncExp):
+            if x.func_name.upper() not in select_func_list:
+                return -1
 
-			res = __check_func_para__(x,table_list,table_alias_dict)
-			if res == -1:
-				return -1
-		else:
-			continue
+            res = __check_func_para__(x,table_list,table_alias_dict)
+            if res == -1:
+                return -1
+        else:
+            continue
 
-	return res
+    return res
 
 ## this function is to check the grammar of the func exp in the groupby  select_list 
 
 def __groupby_func_check__(exp,gb_list,table_list,table_alias_dict):
 
 
-	res = 0
-	
-	if isinstance(exp,YFuncExp) is not True:
-		return 0
-	
-	res = __check_func_para__(exp,table_list,table_alias_dict)
-	if res == -1:
-		return -1
+    res = 0
+    
+    if isinstance(exp,YFuncExp) is not True:
+        return 0
+    
+    res = __check_func_para__(exp,table_list,table_alias_dict)
+    if res == -1:
+        return -1
 
-	if exp.func_name in agg_func_list:
-		return 0
+    if exp.func_name in agg_func_list:
+        return 0
 
-	for tmp in exp.parameter_list:
-		if isinstance(tmp,YRawColExp):
-			tmp_bool = False
-			for x in gb_list.groupby_exp_list:
-				if isinstance(x,YRawColExp):
-					if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-						tmp_bool = True
-						break
-			if tmp_bool is False:
-				return -1
+    for tmp in exp.parameter_list:
+        if isinstance(tmp,YRawColExp):
+            tmp_bool = False
+            for x in gb_list.groupby_exp_list:
+                if isinstance(x,YRawColExp):
+                    if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                        tmp_bool = True
+                        break
+            if tmp_bool is False:
+                return -1
 
-		elif isinstance(tmp,YFuncExp):
-			res = __groupby_func_check__(tmp,gb_list,table_list,table_alias_dict)
-			if res == -1:
-				return -1
+        elif isinstance(tmp,YFuncExp):
+            res = __groupby_func_check__(tmp,gb_list,table_list,table_alias_dict)
+            if res == -1:
+                return -1
 
-		else:
-			continue
+        else:
+            continue
 
-	
+    
 ##
 ## the select_list shouldnot have any grammar errors.
 ##
 def __schema_groupby__(groupby_list,select_list,table_list,table_alias_dict):
 
 
-	res = 0
-	if groupby_list is None:
-		return 0
+    res = 0
+    if groupby_list is None:
+        return 0
 
-	if select_list is None:
-		return -1
+    if select_list is None:
+        return -1
 
-	exp_dict = select_list.dict_exp_and_alias
-	
-	for exp in groupby_list.groupby_exp_list :
-		if isinstance(exp,YRawColExp):
-			res = __check_column__(exp,table_list,table_alias_dict)
-			if res == -1:
-				return -1
+    exp_dict = select_list.dict_exp_and_alias
+    
+    for exp in groupby_list.groupby_exp_list :
+        if isinstance(exp,YRawColExp):
+            res = __check_column__(exp,table_list,table_alias_dict)
+            if res == -1:
+                return -1
 
-		elif isinstance(exp,YFuncExp):
+        elif isinstance(exp,YFuncExp):
 
-			res = __check_func_para__(exp,table_list,table_alias_dict)
-			if res == -1:
-				return -1
+            res = __check_func_para__(exp,table_list,table_alias_dict)
+            if res == -1:
+                return -1
 
-		else: 
-			continue
+        else: 
+            continue
 
-	for exp in exp_dict.keys():
-		if isinstance(exp,YRawColExp):	
-			tmp_bool = False
-			for tmp in groupby_list.groupby_exp_list:
-				if isinstance(tmp,YRawColExp):
-					if tmp.column_name == exp.column_name:
-						tmp_bool = True
-						break
+    for exp in exp_dict.keys():
+        if isinstance(exp,YRawColExp):  
+            tmp_bool = False
+            for tmp in groupby_list.groupby_exp_list:
+                if isinstance(tmp,YRawColExp):
+                    if tmp.column_name == exp.column_name:
+                        tmp_bool = True
+                        break
 
-			if tmp_bool is False:
-				return -1
+            if tmp_bool is False:
+                return -1
 
-		elif isinstance(exp,YFuncExp):
-			res = __groupby_func_check__(exp,groupby_list,table_list,table_alias_dict)
-			if res == -1:
-				return -1
+        elif isinstance(exp,YFuncExp):
+            res = __groupby_func_check__(exp,groupby_list,table_list,table_alias_dict)
+            if res == -1:
+                return -1
 
-		else:
-			continue
-					
+        else:
+            continue
+                    
 
 
 def __schema_where__(where,table_list,table_alias_dict):
-	res = 0
-	func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS"]
+    res = 0
+    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS"]
 
-	if where is None:
-		return res
-	
-	exp = where.where_condition_exp
-	if isinstance(exp,YFuncExp):
-		if exp.func_name not in func_list:
-			return -1
+    if where is None:
+        return res
+    
+    exp = where.where_condition_exp
+    if isinstance(exp,YFuncExp):
+        if exp.func_name not in func_list:
+            return -1
 
-		res = __check_func_para__(exp,table_list,table_alias_dict)
+        res = __check_func_para__(exp,table_list,table_alias_dict)
 
-	elif isinstance(exp,YRawColExp):
+    elif isinstance(exp,YRawColExp):
 
-		res = __check_column__(exp,table_list,table_alias_dict)
-		if res == -1:
-			return -1
+        res = __check_column__(exp,table_list,table_alias_dict)
+        if res == -1:
+            return -1
 
-		tmp_name = None
-		for x in table_list:
-			if column_in_table(exp.column_name,x) is True:
-				tmp_name = x
-				break
-		if tmp_name is None:
-			for x in table_list.values():
-				if column_in_table(exp.column_name,x) is True:
-					tmp_name = x
-					break
+        tmp_name = None
+        for x in table_list:
+            if column_in_table(exp.column_name,x) is True:
+                tmp_name = x
+                break
+        if tmp_name is None:
+            for x in table_list.values():
+                if column_in_table(exp.column_name,x) is True:
+                    tmp_name = x
+                    break
 
-		if tmp_name is None:
-			print "Grammar Error. Shouldn't be here"
-			print 1/0
+        if tmp_name is None:
+            print "Grammar Error. Shouldn't be here"
+            print 1/0
 
-		column_type = global_table_dict[tmp_name].get_column_type_by_name(exp.column_name)
+        column_type = global_table_dict[tmp_name].get_column_type_by_name(exp.column_name)
 
-		if column_type.upper() is not "BOOLEAN":
-			return -1
-		
+        if column_type.upper() is not "BOOLEAN":
+            return -1
+        
 
-	return res
+    return res
 
 
 def __schema_join__(join_cond,table_list,table_alias_dict):
-	res = 0
-	func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS"]
+    res = 0
+    func_list = ["AND","OR","EQ", "GTH", "LTH", "NOT_EQ", "GEQ","LEQ","LIKE","IS"]
 
-	if join_cond is None:
-		return res
+    if join_cond is None:
+        return res
 
-	exp = join_cond.on_condition_exp
-	if isinstance(exp,YFuncExp):
-		if exp.func_name.upper() not in func_list:
-			return -1
+    exp = join_cond.on_condition_exp
+    if isinstance(exp,YFuncExp):
+        if exp.func_name.upper() not in func_list:
+            return -1
 
-		res = __check_func_para__(exp,table_list,table_alias_dict)
-	else:
-		res = -1
+        res = __check_func_para__(exp,table_list,table_alias_dict)
+    else:
+        res = -1
 
-	return res
+    return res
 
 
 def check_schema(tree):
-	res = 0
+    res = 0
 
-	if isinstance(tree,TableNode):
-		print "check_schema:TableNode"
-		
-		if lookup_a_table(tree.table_name) is None:	
-			print "\ttable name error",tree.table_name
-			return -1 
+    if isinstance(tree,TableNode):
+        print "check_schema:TableNode"
+        
+        if lookup_a_table(tree.table_name) is None:     
+            print "\ttable name error",tree.table_name
+            return -1 
 
-		res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\ttable select list error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.select_list.converted_str
-			return res
+        res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\ttable select list error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.select_list.converted_str
+            return res
 
-		res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\ttable where error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.where_condition.converted_str
-			return res
+        res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\ttable where error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.where_condition.converted_str
+            return res
 
-	elif isinstance(tree,TwoJoinNode):
-		print "check schema:TwoJoinNode",tree.left_child.table_list,tree.right_child.table_list
-		if tree.join_explicit == True:
-			res = __schema_join__(tree.join_condition,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\tjoin condition error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.join_condition.converted_str
-			return -1
+    elif isinstance(tree,TwoJoinNode):
+        print "check schema:TwoJoinNode",tree.left_child.table_list,tree.right_child.table_list
+        if tree.join_explicit == True:
+            res = __schema_join__(tree.join_condition,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\tjoin condition error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.join_condition.converted_str
+            return -1
 
-		res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\twhere condition error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.where_condition.converted_str
-			print "\t",global_table_dict.keys()
-			return -1
-		
-		res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res ==-1:
-			print "\tselect list error",tree.select_list.converted_str,tree.table_list,tree.table_alias_dict
-			return -1
+        res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\twhere condition error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.where_condition.converted_str
+            print "\t",global_table_dict.keys()
+            return -1
+        
+        res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res ==-1:
+            print "\tselect list error",tree.select_list.converted_str,tree.table_list,tree.table_alias_dict
+            return -1
 
-		res = check_schema(tree.left_child)
-		if res == -1:
-			print "\tleft child error"
-			return res
+        res = check_schema(tree.left_child)
+        if res == -1:
+            print "\tleft child error"
+            return res
 
-		res = check_schema(tree.right_child)
-		if res == -1:
-			print "\tright child error"
-			return res
+        res = check_schema(tree.right_child)
+        if res == -1:
+            print "\tright child error"
+            return res
 
-	elif isinstance(tree,GroupByNode):
-		print "check schema: GroupByNode"
-		res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\tselect_list error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.select_list.converted_str
-			return res
+    elif isinstance(tree,GroupByNode):
+        print "check schema: GroupByNode"
+        res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\tselect_list error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.select_list.converted_str
+            return res
 
-		res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\twhere condition error"
-			return res
-		
-		res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\t groupby clause error"
-			return res
+        res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\twhere condition error"
+            return res
+        
+        res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\t groupby clause error"
+            return res
 
-		res = check_schema(tree.child)
+        res = check_schema(tree.child)
 
-	elif isinstance(tree,MultipleJoinNode):
-		print "MultipleJoinNode"
-	
-	elif isinstance(tree,SelectProjectNode):
-		print "check schema: ProjectNode"
+    elif isinstance(tree,MultipleJoinNode):
+        print "MultipleJoinNode"
+    
+    elif isinstance(tree,SelectProjectNode):
+        print "check schema: ProjectNode"
 
-		res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\tselect_list error",tree.table_list,tree.table_alias_dict
-			print tree.select_list.converted_str
-			return res
+        res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\tselect_list error",tree.table_list,tree.table_alias_dict
+            print tree.select_list.converted_str
+            return res
 
-		res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\twhere condition error",tree.table_list,tree.table_alias_dict
-			print "\t",tree.where_condition.converted_str
-			return res
-		
-		res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
-		if res == -1:
-			print "\t groupby clause error"
-			return res
+        res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\twhere condition error",tree.table_list,tree.table_alias_dict
+            print "\t",tree.where_condition.converted_str
+            return res
+        
+        res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
+        if res == -1:
+            print "\t groupby clause error"
+            return res
 
-		res = check_schema(tree.child)
-		if res == -1:
-			return res
+        res = check_schema(tree.child)
+        if res == -1:
+            return res
 
-	else:
-		res = -1
-		pass
+    else:
+        res = -1
+        pass
 
-	return res
+    return res
 
 def __remove_para__(para):
-	
-	exp = para.func_obj
-	new_list = []
+    
+    exp = para.func_obj
+    new_list = []
 
-	if isinstance(exp,YFuncExp) is False or exp == para:
-		return
+    if isinstance(exp,YFuncExp) is False or exp == para:
+        return
 
-	for x in exp.parameter_list:
-		if x == para:
-			continue
-	#		tmp_cons = YConsExp(True,"BOOLEAN")
-	#		exp.parameter_list.append(tmp_cons)
-		else:
-			new_list.append(x)
+    for x in exp.parameter_list:
+        if x == para:
+            continue
+    #               tmp_cons = YConsExp(True,"BOOLEAN")
+    #               exp.parameter_list.append(tmp_cons)
+        else:
+            new_list.append(x)
 
-	exp.parameter_list = new_list
+    exp.parameter_list = new_list
 
 
 def __gen_join_key__(exp,key_bool):
-		
-	return_exp = None
-	func_list = ["AND","OR"]
+        
+    return_exp = None
+    func_list = ["AND","OR"]
 
-	if not isinstance(exp,YFuncExp):
-		return None
+    if not isinstance(exp,YFuncExp):
+        return None
 
-	if exp.func_name in func_list:
-		exp_list = []
-		if exp.func_name == "OR":
-			return None
+    if exp.func_name in func_list:
+        exp_list = []
+        if exp.func_name == "OR":
+            return None
 
-		for x in exp.parameter_list:
-			if not isinstance(x,YFuncExp):
-				print 1/0
-			
-			tmp_exp = __gen_join_key__(x,True)
+        for x in exp.parameter_list:
+            if not isinstance(x,YFuncExp):
+                print 1/0
+            
+            tmp_exp = __gen_join_key__(x,True)
 
-			if tmp_exp is not None:
-				exp_list.append(tmp_exp)
+            if tmp_exp is not None:
+                exp_list.append(tmp_exp)
 
-		if len(exp_list) == 0:
-			return None
-		elif len(exp_list) == 1:
-			return_exp = copy.deepcopy(exp_list[0])
-			__remove_para__(exp_list[0])
-			return return_exp
+        if len(exp_list) == 0:
+            return None
+        elif len(exp_list) == 1:
+            return_exp = copy.deepcopy(exp_list[0])
+            __remove_para__(exp_list[0])
+            return return_exp
 
-		else:	
-			for x in exp_list:
-				__remove_para__(x)
-			return_exp = YFuncExp("AND",exp_list)
-			return return_exp
+        else:   
+            for x in exp_list:
+                __remove_para__(x)
+            return_exp = YFuncExp("AND",exp_list)
+            return return_exp
 
-	else:
-		if exp.func_name != "EQ":
-			return  None
+    else:
+        if exp.func_name != "EQ":
+            return  None
 
-		para1 = exp.parameter_list[0]
-		para2 = exp.parameter_list[1]
+        para1 = exp.parameter_list[0]
+        para2 = exp.parameter_list[1]
 
-		if isinstance(para1,YRawColExp) and isinstance(para2,YRawColExp):
-			if para1.table_name != para2.table_name:
-				return exp
+        if isinstance(para1,YRawColExp) and isinstance(para2,YRawColExp):
+            if para1.table_name != para2.table_name:
+                return exp
 
-		return None
+        return None
 
 #the resulst value is either an YFuncExp or None. Be careful
 #It will remove the filtered exp from the func parameter_list
 
 def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
-	return_exp = None
-	func_list = ["AND","OR"]
-	
-	if isinstance(exp,YFuncExp):
-		if exp.func_name in func_list:
-			exp_list = []
+    return_exp = None
+    func_list = ["AND","OR"]
+    
+    if isinstance(exp,YFuncExp):
+        if exp.func_name in func_list:
+            exp_list = []
 
-			tmp_bool = True
-			for tmp in exp.parameter_list:
-				if isinstance(tmp,YFuncExp):
-					if exp.func_name == "OR":
-						tmp_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,False)
-					else:
-						tmp_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,remove_bool)
+            tmp_bool = True
+            for tmp in exp.parameter_list:
+                if isinstance(tmp,YFuncExp):
+                    if exp.func_name == "OR":
+                        tmp_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,False)
+                    else:
+                        tmp_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,remove_bool)
 
-					if exp.func_name == "OR" and tmp_exp is None:
-						tmp_bool = False
+                    if exp.func_name == "OR" and tmp_exp is None:
+                        tmp_bool = False
 
-					if tmp_exp is not None:
-						exp_list.append(tmp_exp)
+                    if tmp_exp is not None:
+                        exp_list.append(tmp_exp)
 
-				else:
-					print 1/0
+                else:
+                    print 1/0
 
-			if tmp_bool == False:
-				return None
+            if tmp_bool == False:
+                return None
 
-			if len(exp_list) == 0:
-				return None
+            if len(exp_list) == 0:
+                return None
 
-			elif len(exp_list) == 1:
-				return_exp = copy.deepcopy(exp_list[0])
-				if remove_bool is True:
-					__remove_para__(exp_list[0])
-				return return_exp
+            elif len(exp_list) == 1:
+                return_exp = copy.deepcopy(exp_list[0])
+                if remove_bool is True:
+                    __remove_para__(exp_list[0])
+                return return_exp
 
-			else:
-				if remove_bool is True:
-					for x in exp_list:
-						__remove_para__(x)
-				return_exp = YFuncExp(exp.func_name,exp_list)
+            else:
+                if remove_bool is True:
+                    for x in exp_list:
+                        __remove_para__(x)
+                return_exp = YFuncExp(exp.func_name,exp_list)
 
-				return return_exp
+                return return_exp
 
-		else:
-			exp_bool = True
-			for tmp in exp.parameter_list:
-				tmp_bool = False
-				if isinstance(tmp,YRawColExp):
-					for x in table_list:
-						if x != tmp.table_name:
-							continue
-						if column_in_table(tmp.column_name,x):
-							tmp_bool = True
-							break
+        else:
+            exp_bool = True
+            for tmp in exp.parameter_list:
+                tmp_bool = False
+                if isinstance(tmp,YRawColExp):
+                    for x in table_list:
+                        if x != tmp.table_name:
+                            continue
+                        if column_in_table(tmp.column_name,x):
+                            tmp_bool = True
+                            break
 
-					for x in table_alias_dict.keys():
-						if x != tmp.table_name:
-							continue
-						if column_in_table(tmp.column_name,table_alias_dict[x]):
-							tmp_bool = True
-							break
-					
-				elif isinstance(tmp,YConsExp):
-					tmp_bool = True
+                    for x in table_alias_dict.keys():
+                        if x != tmp.table_name:
+                            continue
+                        if column_in_table(tmp.column_name,table_alias_dict[x]):
+                            tmp_bool = True
+                            break
+                    
+                elif isinstance(tmp,YConsExp):
+                    tmp_bool = True
 
-				else:
-					new_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,remove_bool)
-					if new_exp is not None:
-						tmp_bool = True
-			
-				exp_bool = tmp_bool and exp_bool
-			
-			if exp_bool is True:
-				return_exp = copy.deepcopy(exp)
-				if remove_bool is True:
-					__remove_para__(exp)
-				return return_exp
-			else:
-				return None
+                else:
+                    new_exp = __boolean_exp_filter__(tmp,table_list,table_alias_dict,remove_bool)
+                    if new_exp is not None:
+                        tmp_bool = True
+            
+                exp_bool = tmp_bool and exp_bool
+            
+            if exp_bool is True:
+                return_exp = copy.deepcopy(exp)
+                if remove_bool is True:
+                    __remove_para__(exp)
+                return return_exp
+            else:
+                return None
 
-	else:
-		print "Bool_exp_filter: shouldn't be here"
-		print 1/0
+    else:
+        print "Bool_exp_filter: shouldn't be here"
+        print 1/0
 
 
 
 def predicate_pushdown(tree):
-	
-	if isinstance(tree,TableNode):
-		return
+    
+    if isinstance(tree,TableNode):
+        return
 
-	elif isinstance(tree,GroupByNode):
+    elif isinstance(tree,GroupByNode):
 
-		if tree.where_condition is  not None:
+        if tree.where_condition is  not None:
 
 #### the where condition of the groupby node is pushed down by its parent.
 
-			if tree.child.where_condition is not None:
-				old_exp = tree.child.where_condition.where_condition_exp
-				para_list = []
-				para_list.append(old_exp)
-				para_list.append(tree.where_condition.where_condition_exp)
-				new_exp = YFuncExp("AND",para_list)
-				tree.child.where_condition.where_condition_exp = copy.deepcopy(new_exp)
-			else:
-				tree.child.where_condition = tree.where_condition
+            if tree.child.where_condition is not None:
+                old_exp = tree.child.where_condition.where_condition_exp
+                para_list = []
+                para_list.append(old_exp)
+                para_list.append(tree.where_condition.where_condition_exp)
+                new_exp = YFuncExp("AND",para_list)
+                tree.child.where_condition.where_condition_exp = copy.deepcopy(new_exp)
+            else:
+                tree.child.where_condition = tree.where_condition
 
-			tree.where_condition = None
+            tree.where_condition = None
 
-		predicate_pushdown(tree.child)
+        predicate_pushdown(tree.child)
 
-	elif isinstance(tree,SelectProjectNode):
+    elif isinstance(tree,SelectProjectNode):
 
-		new_exp = None
+        new_exp = None
 
-		if tree.where_condition is not None:
-# the where_condition of the SP node will not be changed	
-			exp = copy.deepcopy(tree.where_condition.where_condition_exp)
+        if tree.where_condition is not None:
+# the where_condition of the SP node will not be changed        
+            exp = copy.deepcopy(tree.where_condition.where_condition_exp)
 
-			if exp is not None:
+            if exp is not None:
 ##before pushdown change the column name and the table name to avoid grammar error
 
-				col_list = []
-				__get_func_para__(exp,col_list)
-				select_dict = tree.child.select_list.dict_exp_and_alias
+                col_list = []
+                __get_func_para__(exp,col_list)
+                select_dict = tree.child.select_list.dict_exp_and_alias
 
-				for tmp in col_list:
-					tmp_bool = False
-					for x in select_dict.keys():
-						if tmp.column_name == select_dict[x]:
-							tmp_bool = True
-							tmp.table_name = ""
-							if isinstance(x,YRawColExp):
-								tmp.column_name = x.column_name
-								tmp.table_name = x.table_name
-							
-							else:
+                for tmp in col_list:
+                    tmp_bool = False
+                    for x in select_dict.keys():
+                        if tmp.column_name == select_dict[x]:
+                            tmp_bool = True
+                            tmp.table_name = ""
+                            if isinstance(x,YRawColExp):
+                                tmp.column_name = x.column_name
+                                tmp.table_name = x.table_name
+                            
+                            else:
 #### fix me here:select * from (select (f1+f2) a from t1) x where x.a >1;
-								func_obj = tmp.func_obj
-								new_para_list = []
-								for cur_para in func_obj.parameter_list:
-									if not isinstance(cur_para,YRawColExp):
-										new_para_list.append(cur_para)
-										continue
+                                func_obj = tmp.func_obj
+                                new_para_list = []
+                                for cur_para in func_obj.parameter_list:
+                                    if not isinstance(cur_para,YRawColExp):
+                                        new_para_list.append(cur_para)
+                                        continue
 
-									if cur_para.column_name == tmp.column_name:
-										new_para = copy.deepcopy(x)
-										new_para_list.append(new_para)
-									else:
-										new_para_list.append(cur_para)
+                                    if cur_para.column_name == tmp.column_name:
+                                        new_para = copy.deepcopy(x)
+                                        new_para_list.append(new_para)
+                                    else:
+                                        new_para_list.append(cur_para)
 
-								func_obj.parameter_list = new_para_list
-								
-							break
-				
-						if isinstance(x,YRawColExp):
-							if tmp.column_name == x.column_name:
-								tmp_bool = True
-								tmp.table_name = x.table_name
-								break
+                                func_obj.parameter_list = new_para_list
+                                
+                            break
+                
+                        if isinstance(x,YRawColExp):
+                            if tmp.column_name == x.column_name:
+                                tmp_bool = True
+                                tmp.table_name = x.table_name
+                                break
 
-						elif isinstance(x,YFuncExp):
-							if tmp.column_name == select_dict[x]:
-								tmp_bool = True
-								tmp.table_name = ""
-								break
+                        elif isinstance(x,YFuncExp):
+                            if tmp.column_name == select_dict[x]:
+                                tmp_bool = True
+                                tmp.table_name = ""
+                                break
 
-					if tmp_bool is False:
-						print "project predicate pushdown:This shouldn't happen",tmp.column_name,tree.table_list,tree.table_alias_dict,select_dict.values()
-						print 1/0
+                    if tmp_bool is False:
+                        print "project predicate pushdown:This shouldn't happen",tmp.column_name,tree.table_list,tree.table_alias_dict,select_dict.values()
+                        print 1/0
 
 
-				child_exp = __boolean_exp_filter__(exp,tree.in_table_list,tree.in_table_alias_dict,True)
+                child_exp = __boolean_exp_filter__(exp,tree.in_table_list,tree.in_table_alias_dict,True)
 
-				if child_exp is not None:
-					if tree.child.where_condition is None:
-						tree.child.where_condition = FirstStepWhereCondition(None)
-						tree.child.where_condition.where_condition_exp = copy.deepcopy(child_exp)
+                if child_exp is not None:
+                    if tree.child.where_condition is None:
+                        tree.child.where_condition = FirstStepWhereCondition(None)
+                        tree.child.where_condition.where_condition_exp = copy.deepcopy(child_exp)
 
-					else:
-						new_exp = copy.deepcopy(child_exp)
-						para_list = []
-						para_list.append(tree.child.where_condition.where_condition_exp)
-						para_list.append(new_exp)
-						tree.child.where_condition.where_condition_exp = YFuncExp("AND",para_list)
+                    else:
+                        new_exp = copy.deepcopy(child_exp)
+                        para_list = []
+                        para_list.append(tree.child.where_condition.where_condition_exp)
+                        para_list.append(new_exp)
+                        tree.child.where_condition.where_condition_exp = YFuncExp("AND",para_list)
 
-		tree.where_condition = None
+        tree.where_condition = None
 
-		predicate_pushdown(tree.child)
+        predicate_pushdown(tree.child)
 
-	elif isinstance(tree,TwoJoinNode):
+    elif isinstance(tree,TwoJoinNode):
 
-		if tree.where_condition is not None:
-			exp = tree.where_condition.where_condition_exp
+        if tree.where_condition is not None:
+            exp = tree.where_condition.where_condition_exp
 
 ####generating join key expression
 
-			left_exp =__boolean_exp_filter__(exp,tree.left_child.table_list,tree.left_child.table_alias_dict,True)
-			right_exp =__boolean_exp_filter__(exp,tree.right_child.table_list,tree.right_child.table_alias_dict,True)
-			
-			if left_exp is not None:
-				if tree.left_child.where_condition is None:
-					tree.left_child.where_condition = FirstStepWhereCondition(None)
-				tree.left_child.where_condition.where_condition_exp = copy.deepcopy(left_exp)
+            left_exp =__boolean_exp_filter__(exp,tree.left_child.table_list,tree.left_child.table_alias_dict,True)
+            right_exp =__boolean_exp_filter__(exp,tree.right_child.table_list,tree.right_child.table_alias_dict,True)
+            
+            if left_exp is not None:
+                if tree.left_child.where_condition is None:
+                    tree.left_child.where_condition = FirstStepWhereCondition(None)
+                tree.left_child.where_condition.where_condition_exp = copy.deepcopy(left_exp)
 
-			if right_exp is not None:
-				if tree.right_child.where_condition is None:
-					tree.right_child.where_condition = FirstStepWhereCondition(None)
-				tree.right_child.where_condition.where_condition_exp = copy.deepcopy(right_exp)
+            if right_exp is not None:
+                if tree.right_child.where_condition is None:
+                    tree.right_child.where_condition = FirstStepWhereCondition(None)
+                tree.right_child.where_condition.where_condition_exp = copy.deepcopy(right_exp)
 
-			if tree.join_explicit is False:
-				join_exp = __gen_join_key__(exp,True)
-				if join_exp is not None:
-					if tree.join_condition is None:
-						tree.join_condition = FirstStepWhereCondition(None)
-					tree.join_condition.where_condition_exp = copy.deepcopy(join_exp)
+            if tree.join_explicit is False:
+                join_exp = __gen_join_key__(exp,True)
+                if join_exp is not None:
+                    if tree.join_condition is None:
+                        tree.join_condition = FirstStepWhereCondition(None)
+                    tree.join_condition.where_condition_exp = copy.deepcopy(join_exp)
 
-			col_list = []
+            col_list = []
 
-			__get_func_para__(exp,col_list)
-			if len(col_list) == 0:
-				tree.where_condition = None
+            __get_func_para__(exp,col_list)
+            if len(col_list) == 0:
+                tree.where_condition = None
 
-		predicate_pushdown(tree.left_child)
-		predicate_pushdown(tree.right_child)
+        predicate_pushdown(tree.left_child)
+        predicate_pushdown(tree.right_child)
 
-	elif isinstance(tree,MultipleJoinNode):
-		print "MultipleJoinNode"
+    elif isinstance(tree,MultipleJoinNode):
+        print "MultipleJoinNode"
 
-	else:
-		return
+    else:
+        return
 
 ## input exp should be YRawColExp
 ## return new_exp
 def __gen_column_index__(exp,table_list,table_alias_dict):
 
-	if exp is None:
-		return None
-	
-	new_exp = None
+    if exp is None:
+        return None
+    
+    new_exp = None
 
-	if isinstance(exp,YRawColExp):
-		if exp.column_name == "*":
+    if isinstance(exp,YRawColExp):
+        if exp.column_name == "*":
 ##
 ## * should be handled separately by select_list
 ##
-			new_exp = exp
-			return new_exp
+            new_exp = exp
+            return new_exp
 
-		if exp.table_name != "":
-			if exp.table_name not in table_alias_dict.keys():
-				if exp.table_name not in table_list:
-					print "Grammar Error",exp.table_name,exp.column_name,table_list,table_alias_dict
-					print 1/0
-				tmp_table =  lookup_a_table(exp.table_name) 
+        if exp.table_name != "":
+            if exp.table_name not in table_alias_dict.keys():
+                if exp.table_name not in table_list:
+                    print "Grammar Error",exp.table_name,exp.column_name,table_list,table_alias_dict
+                    print 1/0
+                tmp_table =  lookup_a_table(exp.table_name) 
 
-				if tmp_table is None:
-					return None
+                if tmp_table is None:
+                    return None
 
-				index = tmp_table.get_column_index_by_name(exp.column_name)
-				new_exp = YRawColExp(exp.table_name,index)
-				new_exp.column_type = exp.column_type
-			else:
-				tmp_table = lookup_a_table(table_alias_dict[exp.table_name])
+                index = tmp_table.get_column_index_by_name(exp.column_name)
+                new_exp = YRawColExp(exp.table_name,index)
+                new_exp.column_type = exp.column_type
+            else:
+                tmp_table = lookup_a_table(table_alias_dict[exp.table_name])
 
-				if tmp_table is None:
-					return None
+                if tmp_table is None:
+                    return None
 
-				index = tmp_table.get_column_index_by_name(exp.column_name)
-				new_exp = YRawColExp(exp.table_name,index)
-				new_exp.column_type = exp.column_type
-		else:
-			tmp_column = lookup_a_column(exp.column_name)
-			tmp_table = None
-			for tmp in tmp_column:
-				if tmp.table_schema.table_name in table_list:
-					tmp_table = lookup_a_table(tmp.table_schema.table_name)
-					break
-				if tmp.table_schema.table_name in table_alias_dict.values():
-					tmp_table = lookup_a_table(tmp.table_schema.table_name)
-					break
-			if tmp_table is None:
-				return None
+                index = tmp_table.get_column_index_by_name(exp.column_name)
+                new_exp = YRawColExp(exp.table_name,index)
+                new_exp.column_type = exp.column_type
+        else:
+            tmp_column = lookup_a_column(exp.column_name)
+            tmp_table = None
+            for tmp in tmp_column:
+                if tmp.table_schema.table_name in table_list:
+                    tmp_table = lookup_a_table(tmp.table_schema.table_name)
+                    break
+                if tmp.table_schema.table_name in table_alias_dict.values():
+                    tmp_table = lookup_a_table(tmp.table_schema.table_name)
+                    break
+            if tmp_table is None:
+                return None
 
-			index = tmp_table.get_column_index_by_name(exp.column_name)
-			new_exp = YRawColExp(tmp.table_schema.table_name,index)
-			new_exp.column_type = exp.column_type
+            index = tmp_table.get_column_index_by_name(exp.column_name)
+            new_exp = YRawColExp(tmp.table_schema.table_name,index)
+            new_exp.column_type = exp.column_type
 
-		return new_exp
+        return new_exp
 
 def __gen_func_index__(exp,table_list,table_alias_dict):
 
-	if isinstance(exp,YFuncExp) is not True:
-		print 1/0
+    if isinstance(exp,YFuncExp) is not True:
+        print 1/0
 
-	if exp is None: 
-		return None
-	
-	new_exp = YFuncExp(exp.func_name,exp.parameter_list)
+    if exp is None: 
+        return None
+    
+    new_exp = YFuncExp(exp.func_name,exp.parameter_list)
 
-	if isinstance(exp,YFuncExp):
-		para_list = exp.parameter_list
-		new_para_list = []
-		for para in para_list:
-			if isinstance(para,YRawColExp):
-				if para.column_name == "*":
-					print  1/0
+    if isinstance(exp,YFuncExp):
+        para_list = exp.parameter_list
+        new_para_list = []
+        for para in para_list:
+            if isinstance(para,YRawColExp):
+                if para.column_name == "*":
+                    print  1/0
 
-				new_para = __gen_column_index__(para,table_list,table_alias_dict)
-				if new_para is None:
-					print "COlumn Index error.",para.column_name,table_list,table_alias_dict,exp.func_name
-					print 1/0
+                new_para = __gen_column_index__(para,table_list,table_alias_dict)
+                if new_para is None:
+                    print "COlumn Index error.",para.column_name,table_list,table_alias_dict,exp.func_name
+                    print 1/0
 
-				new_para_list.append(new_para)
+                new_para_list.append(new_para)
 
-			elif isinstance(para,YFuncExp):
-				tmp_exp = __gen_func_index__(para,table_list,table_alias_dict)
-				if tmp_exp is None:
-					print 1/0				
+            elif isinstance(para,YFuncExp):
+                tmp_exp = __gen_func_index__(para,table_list,table_alias_dict)
+                if tmp_exp is None:
+                    print 1/0                               
 
-				new_para_list.append(tmp_exp)
-			
-			elif isinstance(para,YConsExp):
-				new_para_list.append(para)
+                new_para_list.append(tmp_exp)
+            
+            elif isinstance(para,YConsExp):
+                new_para_list.append(para)
 
-		new_exp.parameter_list = list(new_para_list)
+        new_exp.parameter_list = list(new_para_list)
 
-	return new_exp
-		
+    return new_exp
+        
 
 def __gen_select_index__(select_list,table_list,table_alias_dict):
-	
-	if select_list is None:
-		return
-	new_select_dict = {}
-	new_exp_list = []
-	exp_dict = select_list.dict_exp_and_alias.copy()
-	exp_list = select_list.tmp_exp_list
+    
+    if select_list is None:
+        return
+    new_select_dict = {}
+    new_exp_list = []
+    exp_dict = select_list.dict_exp_and_alias.copy()
+    exp_list = select_list.tmp_exp_list
 
-	for exp in exp_list:
-		if isinstance(exp,YRawColExp):
+    for exp in exp_list:
+        if isinstance(exp,YRawColExp):
 
-			new_exp = __gen_column_index__(exp,table_list,table_alias_dict)
-			if new_exp is None:
-				print "Column index error",exp.table_name,exp.column_name
-				print 1/0
-			new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
-			new_exp_list.append(new_exp)
+            new_exp = __gen_column_index__(exp,table_list,table_alias_dict)
+            if new_exp is None:
+                print "Column index error",exp.table_name,exp.column_name
+                print 1/0
+            new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
+            new_exp_list.append(new_exp)
 
-		elif isinstance(exp,YFuncExp):
-			new_exp = __gen_func_index__(exp,table_list,table_alias_dict)
-			new_exp_list.append(new_exp)
-			new_select_dict[new_exp] = None
-		else:
-			new_exp_list.append(exp)
-			new_select_dict[exp] = None
+        elif isinstance(exp,YFuncExp):
+            new_exp = __gen_func_index__(exp,table_list,table_alias_dict)
+            new_exp_list.append(new_exp)
+            new_select_dict[new_exp] = None
+        else:
+            new_exp_list.append(exp)
+            new_select_dict[exp] = None
 
-	select_list.dict_exp_and_alias = new_select_dict
-	select_list.tmp_exp_list = new_exp_list
+    select_list.dict_exp_and_alias = new_select_dict
+    select_list.tmp_exp_list = new_exp_list
 
 
 
 def __gen_where_index__(where,table_list,table_alias_dict):
-	if where is None:
-		return
+    if where is None:
+        return
 
-	if isinstance(where.where_condition_exp,YFuncExp):
-		where.where_condition_exp =__gen_func_index__(where.where_condition_exp,table_list,table_alias_dict)
-	
+    if isinstance(where.where_condition_exp,YFuncExp):
+        where.where_condition_exp =__gen_func_index__(where.where_condition_exp,table_list,table_alias_dict)
+    
 
 def gen_column_index(tree):
-	
-	if isinstance(tree,TableNode):
-		__gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		__gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+    
+    if isinstance(tree,TableNode):
+        __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
 
-	elif isinstance(tree,GroupByNode):
-		if tree.select_list is None or tree.child.select_list is None:
-			print 1/0
+    elif isinstance(tree,GroupByNode):
+        if tree.select_list is None or tree.child.select_list is None:
+            print 1/0
 
-		select_dict = tree.child.select_list.dict_exp_and_alias
-		exp_list = tree.child.select_list.tmp_exp_list
+        select_dict = tree.child.select_list.dict_exp_and_alias
+        exp_list = tree.child.select_list.tmp_exp_list
 
-		for exp in tree.select_list.tmp_exp_list:
+        for exp in tree.select_list.tmp_exp_list:
 ## generate index for the groupby select list
 
-			if isinstance(exp,YRawColExp):
-				for tmp in exp_list:
-					if isinstance(tmp,YRawColExp):
-						if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
-							exp.column_name = exp_list.index(tmp)
-							break
-					else:
-						if exp.column_name == select_dict[tmp]:
-							exp.column_name = exp_list.index(tmp)
-							break
+            if isinstance(exp,YRawColExp):
+                for tmp in exp_list:
+                    if isinstance(tmp,YRawColExp):
+                        if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
+                            exp.column_name = exp_list.index(tmp)
+                            break
+                    else:
+                        if exp.column_name == select_dict[tmp]:
+                            exp.column_name = exp_list.index(tmp)
+                            break
 
-			elif isinstance(exp,YFuncExp):
-				col_list = []
-				__get_func_para__(exp,col_list)
-				for tmp in col_list:
-					for x in exp_list:
-						if isinstance(x,YRawColExp):
-							if x.table_name == tmp.table_name and x.column_name == tmp.column_name:
-								tmp.column_name = exp_list.index(x)
-								break
+            elif isinstance(exp,YFuncExp):
+                col_list = []
+                __get_func_para__(exp,col_list)
+                for tmp in col_list:
+                    for x in exp_list:
+                        if isinstance(x,YRawColExp):
+                            if x.table_name == tmp.table_name and x.column_name == tmp.column_name:
+                                tmp.column_name = exp_list.index(x)
+                                break
 
-						else:
-							if tmp.column_name == select_dict[x]:
-								tmp.column_name = exp_list.index(x)
-								break
-		if tree.group_by_clause is not None:
-			for exp in tree.group_by_clause.groupby_exp_list:
-				if isinstance(exp,YRawColExp):
-					for tmp in exp_list:
-						if isinstance(tmp,YRawColExp):
-							if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
-								exp.column_name = exp_list.index(tmp)
-								break
-						else:
-							if exp.column_name == select_dict[tmp]:
-								exp.column_name = exp_list.index(tmp)
-								break
+                        else:
+                            if tmp.column_name == select_dict[x]:
+                                tmp.column_name = exp_list.index(x)
+                                break
+        if tree.group_by_clause is not None:
+            for exp in tree.group_by_clause.groupby_exp_list:
+                if isinstance(exp,YRawColExp):
+                    for tmp in exp_list:
+                        if isinstance(tmp,YRawColExp):
+                            if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
+                                exp.column_name = exp_list.index(tmp)
+                                break
+                        else:
+                            if exp.column_name == select_dict[tmp]:
+                                exp.column_name = exp_list.index(tmp)
+                                break
 
-		gen_column_index(tree.child)
+        gen_column_index(tree.child)
 
-	elif isinstance(tree,TwoJoinNode):
+    elif isinstance(tree,TwoJoinNode):
 
-		left_select = None
-		right_select = None
+        left_select = None
+        right_select = None
 
-		tree.table_list = []
-	##	tree.table_alias_dict = []
+        tree.table_list = []
+    ##      tree.table_alias_dict = []
 
 ##table_alias_dict is not changed. It is used to determine whether this is a self join
 ## change the table name  to LEFT and RIGHT
 
-		if tree.left_child.select_list is not None:
-			left_select = tree.left_child.select_list.dict_exp_and_alias
-			left_exp = tree.left_child.select_list.tmp_exp_list
-			for exp in tree.select_list.tmp_exp_list:
-				if isinstance(exp,YConsExp):
-					continue
+        if tree.left_child.select_list is not None:
+            left_select = tree.left_child.select_list.dict_exp_and_alias
+            left_exp = tree.left_child.select_list.tmp_exp_list
+            for exp in tree.select_list.tmp_exp_list:
+                if isinstance(exp,YConsExp):
+                    continue
 
-				elif isinstance(exp,YFuncExp):
-					col_list = []
-					__get_func_para__(exp,col_list)
-					for x in col_list:
-						for tmp in left_exp:
-							if isinstance(tmp,YRawColExp):
-								if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-									x.table_name = "LEFT"
-									x.column_name = left_exp.index(tmp)
-									if "LEFT" not in tree.table_list:
-										tree.table_list.append("LEFT")
-									break
-							else:
-								if x.column_name == left_select[tmp]:
-									x.table_name = "LEFT"
-									if "LEFT" not in tree.table_list:
-										tree.table_list.append("LEFT")
-									x.column_name = left_exp.index(tmp)
-									break
-					continue
-
-
-				for tmp in left_exp:
-					if isinstance(tmp,YRawColExp):
-						if exp.column_name == tmp.column_name and exp.table_name == tmp.table_name:
-							exp.table_name = "LEFT"
-							exp.column_name = left_exp.index(tmp)
-							if "LEFT" not in tree.table_list:
-								tree.table_list.append("LEFT")
-							break
-					else:
-						if exp.column_name == left_select[tmp]:
-							exp.table_name = "LEFT"
-							if "LEFT" not in tree.table_list:
-								tree.table_list.append("LEFT")
-							exp.column_name = left_exp.index(tmp)
-							break
+                elif isinstance(exp,YFuncExp):
+                    col_list = []
+                    __get_func_para__(exp,col_list)
+                    for x in col_list:
+                        for tmp in left_exp:
+                            if isinstance(tmp,YRawColExp):
+                                if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                                    x.table_name = "LEFT"
+                                    x.column_name = left_exp.index(tmp)
+                                    if "LEFT" not in tree.table_list:
+                                        tree.table_list.append("LEFT")
+                                    break
+                            else:
+                                if x.column_name == left_select[tmp]:
+                                    x.table_name = "LEFT"
+                                    if "LEFT" not in tree.table_list:
+                                        tree.table_list.append("LEFT")
+                                    x.column_name = left_exp.index(tmp)
+                                    break
+                    continue
 
 
-			if tree.where_condition is not None:
-				where_exp = tree.where_condition.where_condition_exp
-				col_list = []
-				__get_func_para__(where_exp,col_list)
-				for tmp in col_list:
-					for x in left_exp:
-						if isinstance(x,YRawColExp):
-							if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
-								tmp.table_name = "LEFT"
-								tmp.column_name = left_select.keys().index(x)
-								if "LEFT" not in tree.table_list:
-									tree.table_list.append("LEFT")
-								break
-						else:
-							if tmp.column_name == left_select[x]:
-								tmp.table_name = "LEFT"
-								tmp.column_name = left_exp.index(x)
-								if "LEFT" not in tree.table_list:
-									tree.table_list.append("LEFT")
-								break
-			join_exp = None
-			if tree.join_explicit is True:
-				join_exp = tree.join_condition.on_condition_exp
-			elif tree.join_condition is not None:
-				join_exp = tree.join_condition.where_condition_exp
-
-			if join_exp is not None:
-				col_list = []
-				__get_func_para__(join_exp,col_list)
-				for tmp in col_list:
-					for x in left_exp:
-						if isinstance(x,YRawColExp):
-							if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
-								tmp.table_name = "LEFT"
-								tmp.column_name = left_exp.index(x)
-								if "LEFT" not in tree.table_list:
-									tree.table_list.append("LEFT")
-								break
-						else:
-							if tmp.column_name == left_select[x]:
-								tmp.table_name = "LEFT"
-								tmp.column_name = left_exp.index(x)
-								if "LEFT" not in tree.table_list:
-									tree.table_list.append("LEFT")
-								break
+                for tmp in left_exp:
+                    if isinstance(tmp,YRawColExp):
+                        if exp.column_name == tmp.column_name and exp.table_name == tmp.table_name:
+                            exp.table_name = "LEFT"
+                            exp.column_name = left_exp.index(tmp)
+                            if "LEFT" not in tree.table_list:
+                                tree.table_list.append("LEFT")
+                            break
+                    else:
+                        if exp.column_name == left_select[tmp]:
+                            exp.table_name = "LEFT"
+                            if "LEFT" not in tree.table_list:
+                                tree.table_list.append("LEFT")
+                            exp.column_name = left_exp.index(tmp)
+                            break
 
 
-		if tree.right_child.select_list is not None:
-			right_select = tree.right_child.select_list.dict_exp_and_alias
-			right_exp = tree.right_child.select_list.tmp_exp_list
-			for exp in tree.select_list.tmp_exp_list:
-				if isinstance(exp,YConsExp):
-					continue
+            if tree.where_condition is not None:
+                where_exp = tree.where_condition.where_condition_exp
+                col_list = []
+                __get_func_para__(where_exp,col_list)
+                for tmp in col_list:
+                    for x in left_exp:
+                        if isinstance(x,YRawColExp):
+                            if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                tmp.table_name = "LEFT"
+                                tmp.column_name = left_select.keys().index(x)
+                                if "LEFT" not in tree.table_list:
+                                    tree.table_list.append("LEFT")
+                                break
+                        else:
+                            if tmp.column_name == left_select[x]:
+                                tmp.table_name = "LEFT"
+                                tmp.column_name = left_exp.index(x)
+                                if "LEFT" not in tree.table_list:
+                                    tree.table_list.append("LEFT")
+                                break
+            join_exp = None
+            if tree.join_explicit is True:
+                join_exp = tree.join_condition.on_condition_exp
+            elif tree.join_condition is not None:
+                join_exp = tree.join_condition.where_condition_exp
 
-				elif isinstance(exp,YFuncExp):
-					col_list = []
-					__get_func_para__(exp,col_list)
-					for x in col_list:
-						for tmp in right_exp:
-							if isinstance(tmp,YRawColExp):
-								if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-									x.table_name = "RIGHT"
-									x.column_name = right_exp.index(tmp)
-									if "RIGHT" not in tree.table_list:
-										tree.table_list.append("RIGHT")
-									break
-							else:
-								if x.column_name == right_select[tmp]:
-									x.table_name = "RIGHT"
-									if "RIGHT" not in tree.table_list:
-										tree.table_list.append("RIGHT")
-									x.column_name = right_exp.index(tmp)
-									break
-					continue
+            if join_exp is not None:
+                col_list = []
+                __get_func_para__(join_exp,col_list)
+                for tmp in col_list:
+                    for x in left_exp:
+                        if isinstance(x,YRawColExp):
+                            if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                tmp.table_name = "LEFT"
+                                tmp.column_name = left_exp.index(x)
+                                if "LEFT" not in tree.table_list:
+                                    tree.table_list.append("LEFT")
+                                break
+                        else:
+                            if tmp.column_name == left_select[x]:
+                                tmp.table_name = "LEFT"
+                                tmp.column_name = left_exp.index(x)
+                                if "LEFT" not in tree.table_list:
+                                    tree.table_list.append("LEFT")
+                                break
 
-				for tmp in right_exp:
-					if isinstance(tmp,YRawColExp):
-						if exp.column_name == tmp.column_name and exp.table_name == tmp.table_name:
-							exp.table_name = "RIGHT"
-							exp.column_name = right_exp.index(tmp)
-							if "RIGHT" not in tree.table_list:
-								tree.table_list.append("RIGHT")
-							break
-					else:
-						if exp.column_name == right_select[tmp]:
-							exp.table_name = "RIGHT"
-							exp.column_name = right_exp.index(tmp)
-							if "RIGHT" not in tree.table_list:
-								tree.table_list.append("RIGHT")
 
-			if tree.where_condition is not None:
-				where_exp = tree.where_condition.where_condition_exp
-				col_list = []
-				__get_func_para__(where_exp,col_list)
+        if tree.right_child.select_list is not None:
+            right_select = tree.right_child.select_list.dict_exp_and_alias
+            right_exp = tree.right_child.select_list.tmp_exp_list
+            for exp in tree.select_list.tmp_exp_list:
+                if isinstance(exp,YConsExp):
+                    continue
 
-				for tmp in col_list:
-					for x in right_exp:
-						if isinstance(x,YRawColExp):
-							if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
-								tmp.table_name = "RIGHT"
-								tmp.column_name = right_exp.index(x)
-								if "RIGHT" not in tree.table_list:
-									tree.table_list.append("RIGHT")
-								break
-						else:
-							if tmp.column_name == right_select[x]:
-								tmp.table_name = "RIGHT"
-								tmp.column_name = right_exp.index(x)
-								if "RIGHT" not in tree.table_list:
-									tree.table_list.append("RIGHT")
-								break
+                elif isinstance(exp,YFuncExp):
+                    col_list = []
+                    __get_func_para__(exp,col_list)
+                    for x in col_list:
+                        for tmp in right_exp:
+                            if isinstance(tmp,YRawColExp):
+                                if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                                    x.table_name = "RIGHT"
+                                    x.column_name = right_exp.index(tmp)
+                                    if "RIGHT" not in tree.table_list:
+                                        tree.table_list.append("RIGHT")
+                                    break
+                            else:
+                                if x.column_name == right_select[tmp]:
+                                    x.table_name = "RIGHT"
+                                    if "RIGHT" not in tree.table_list:
+                                        tree.table_list.append("RIGHT")
+                                    x.column_name = right_exp.index(tmp)
+                                    break
+                    continue
 
-			join_exp = None
-			if tree.join_explicit is True:
-				join_exp = tree.join_condition.on_condition_exp
-			elif tree.join_condition is not None:
-				join_exp = tree.join_condition.where_condition_exp
+                for tmp in right_exp:
+                    if isinstance(tmp,YRawColExp):
+                        if exp.column_name == tmp.column_name and exp.table_name == tmp.table_name:
+                            exp.table_name = "RIGHT"
+                            exp.column_name = right_exp.index(tmp)
+                            if "RIGHT" not in tree.table_list:
+                                tree.table_list.append("RIGHT")
+                            break
+                    else:
+                        if exp.column_name == right_select[tmp]:
+                            exp.table_name = "RIGHT"
+                            exp.column_name = right_exp.index(tmp)
+                            if "RIGHT" not in tree.table_list:
+                                tree.table_list.append("RIGHT")
 
-			if join_exp is not None:
-				col_list = []
-				__get_func_para__(join_exp,col_list)
-				for tmp in col_list:
-					for x in right_exp:
-						if isinstance(x,YRawColExp):
-							if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
-								tmp.table_name = "RIGHT"
-								tmp.column_name = right_exp.index(x)
-								if "RIGHT" not in tree.table_list:
-									tree.table_list.append("RIGHT")
-								break
-						else:
-							if tmp.column_name == right_select[x]:
-								tmp.table_name = "RIGHT"
-								tmp.column_name = right_exp.index(x)
-								if "RIGHT" not in tree.table_list:
-									tree.table_list.append("RIGHT")
-								break
+            if tree.where_condition is not None:
+                where_exp = tree.where_condition.where_condition_exp
+                col_list = []
+                __get_func_para__(where_exp,col_list)
 
-		gen_column_index(tree.left_child)
-		gen_column_index(tree.right_child)
-		
-	elif isinstance(tree,MultipleJoinNode):
-		pass
+                for tmp in col_list:
+                    for x in right_exp:
+                        if isinstance(x,YRawColExp):
+                            if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                tmp.table_name = "RIGHT"
+                                tmp.column_name = right_exp.index(x)
+                                if "RIGHT" not in tree.table_list:
+                                    tree.table_list.append("RIGHT")
+                                break
+                        else:
+                            if tmp.column_name == right_select[x]:
+                                tmp.table_name = "RIGHT"
+                                tmp.column_name = right_exp.index(x)
+                                if "RIGHT" not in tree.table_list:
+                                    tree.table_list.append("RIGHT")
+                                break
 
-	elif isinstance(tree,SelectProjectNode):
-		__gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
-		__gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
-		gen_column_index(tree.child)
-		
+            join_exp = None
+            if tree.join_explicit is True:
+                join_exp = tree.join_condition.on_condition_exp
+            elif tree.join_condition is not None:
+                join_exp = tree.join_condition.where_condition_exp
+
+            if join_exp is not None:
+                col_list = []
+                __get_func_para__(join_exp,col_list)
+                for tmp in col_list:
+                    for x in right_exp:
+                        if isinstance(x,YRawColExp):
+                            if tmp.column_name == x.column_name and tmp.table_name == x.table_name:
+                                tmp.table_name = "RIGHT"
+                                tmp.column_name = right_exp.index(x)
+                                if "RIGHT" not in tree.table_list:
+                                    tree.table_list.append("RIGHT")
+                                break
+                        else:
+                            if tmp.column_name == right_select[x]:
+                                tmp.table_name = "RIGHT"
+                                tmp.column_name = right_exp.index(x)
+                                if "RIGHT" not in tree.table_list:
+                                    tree.table_list.append("RIGHT")
+                                break
+
+        gen_column_index(tree.left_child)
+        gen_column_index(tree.right_child)
+        
+    elif isinstance(tree,MultipleJoinNode):
+        pass
+
+    elif isinstance(tree,SelectProjectNode):
+        __gen_select_index__(tree.select_list,tree.table_list,tree.table_alias_dict)
+        __gen_where_index__(tree.where_condition,tree.table_list,tree.table_alias_dict)
+        gen_column_index(tree.child)
+        
 
 
 def __gen_project_list__(select_list,table_list,table_alias_dict,project_list):
 
-	exp_dict = select_list.dict_exp_and_alias
-	
-	for exp in select_list.tmp_exp_list:
-		col_type = None
+    exp_dict = select_list.dict_exp_and_alias
+    
+    for exp in select_list.tmp_exp_list:
+        col_type = None
 
-		if isinstance(exp,YRawColExp):
-			if exp.column_name == "*":
-				for tmp in table_list:
-					tmp_table = lookup_a_table(tmp)
-					if tmp_table is None:
-						continue
+        if isinstance(exp,YRawColExp):
+            if exp.column_name == "*":
+                for tmp in table_list:
+                    tmp_table = lookup_a_table(tmp)
+                    if tmp_table is None:
+                        continue
 
-					for x in tmp_table.column_list:
-						tmp_col = copy.deepcopy(x)
-						project_list.append(tmp_col)
+                    for x in tmp_table.column_list:
+                        tmp_col = copy.deepcopy(x)
+                        project_list.append(tmp_col)
 
-				for tmp in table_alias_dict.values():
-					tmp_table = lookup_a_table(tmp)
-					if tmp_table is None:
-						continue
+                for tmp in table_alias_dict.values():
+                    tmp_table = lookup_a_table(tmp)
+                    if tmp_table is None:
+                        continue
 
-					for x in tmp_table.column_list:
-						tmp_col = copy.deepcopy(x)
-						project_list.append(tmp_col)
+                    for x in tmp_table.column_list:
+                        tmp_col = copy.deepcopy(x)
+                        project_list.append(tmp_col)
 
-				continue
-
-
-			tmp_column = lookup_a_column(exp.column_name)
-			for tmp in tmp_column:
-				if tmp.table_schema.table_name in table_list :
-
-					col_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
-					break
-
-				if tmp.table_schema.table_name in table_alias_dict.values():
-
-					col_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
-					break
+                continue
 
 
-			if col_type is not None:
-				if exp_dict[exp] is not None:
-					a_col = ColumnSchema(exp_dict[exp],col_type)
-				else:
-					a_col = ColumnSchema(exp.column_name,col_type)
-				project_list.append(a_col)
+            tmp_column = lookup_a_column(exp.column_name)
+            for tmp in tmp_column:
+                if tmp.table_schema.table_name in table_list :
 
-		elif isinstance(exp,YFuncExp):
-			if exp_dict[exp] is not None:
-##				
+                    col_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
+                    break
+
+                if tmp.table_schema.table_name in table_alias_dict.values():
+
+                    col_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
+                    break
+
+
+            if col_type is not None:
+                if exp_dict[exp] is not None:
+                    a_col = ColumnSchema(exp_dict[exp],col_type)
+                else:
+                    a_col = ColumnSchema(exp.column_name,col_type)
+                project_list.append(a_col)
+
+        elif isinstance(exp,YFuncExp):
+            if exp_dict[exp] is not None:
+##                              
 ##fix me: lookup the return type of the func
 ##
-				col_type = "DECIMAL"
-				a_col = ColumnSchema(exp_dict[exp],"DECIMAL")
-				project_list.append(a_col)
-		else:
-			print "currently doesn't support constant in sub query"
-			print 1/0
+                col_type = "DECIMAL"
+                a_col = ColumnSchema(exp_dict[exp],"DECIMAL")
+                project_list.append(a_col)
+        else:
+            print "currently doesn't support constant in sub query"
+            print 1/0
 
 
 def gen_project_list(tree):
 
-	if isinstance(tree,TableNode):
-		return
+    if isinstance(tree,TableNode):
+        return
 
-	elif isinstance(tree,GroupByNode):
-		gen_project_list(tree.child)
+    elif isinstance(tree,GroupByNode):
+        gen_project_list(tree.child)
 
-	elif isinstance(tree,TwoJoinNode):
-		gen_project_list(tree.left_child)
+    elif isinstance(tree,TwoJoinNode):
+        gen_project_list(tree.left_child)
 
-		gen_project_list(tree.right_child)
+        gen_project_list(tree.right_child)
 
-	elif isinstance(tree,SelectProjectNode):
-		gen_project_list(tree.child)
+    elif isinstance(tree,SelectProjectNode):
+        gen_project_list(tree.child)
 
-	    	for tmp in tree.child.table_list:
-			if tmp not in tree.in_table_list:
-				tree.in_table_list.append(tmp)
-	   	tree.in_table_alias_dict = tree.child.table_alias_dict
+        for tmp in tree.child.table_list:
+            if tmp not in tree.in_table_list:
+                tree.in_table_list.append(tmp)
+        tree.in_table_alias_dict = tree.child.table_alias_dict
 
 
-		project_list = []
-		__gen_project_list__(tree.child.select_list,tree.in_table_list,tree.in_table_alias_dict,project_list)
-		dup_bool = False
+        project_list = []
+        __gen_project_list__(tree.child.select_list,tree.in_table_list,tree.in_table_alias_dict,project_list)
+        dup_bool = False
 
-		tmp_name = tree.table_alias
+        tmp_name = tree.table_alias
 
-		if tmp_name not in global_table_dict.keys():
-			tmp_schema = TableSchema(tmp_name,project_list)
-			global_table_dict[tmp_name] = tmp_schema
+        if tmp_name not in global_table_dict.keys():
+            tmp_schema = TableSchema(tmp_name,project_list)
+            global_table_dict[tmp_name] = tmp_schema
 
-		else:
-			while tmp_name in global_table_dict.keys():
-				tmp_name = tmp_name + "_1"
-			tmp_schema = TableSchema(tmp_name,project_list)
-			global_table_dict[tmp_name] = tmp_schema
-		
-		tree.table_alias_dict[tree.table_alias] = tmp_name
-		
+        else:
+            while tmp_name in global_table_dict.keys():
+                tmp_name = tmp_name + "_1"
+            tmp_schema = TableSchema(tmp_name,project_list)
+            global_table_dict[tmp_name] = tmp_schema
+        
+        tree.table_alias_dict[tree.table_alias] = tmp_name
+        
 
-	else:
-		return
+    else:
+        return
 
 
 def __select_list_filter__(select_list,table_list,table_alias_dict,new_select_dict,new_exp_list):
-	
-	math_func_list = ["PLUS","MINUS","DIVIDE","MULTIPLY"]
+    
+    math_func_list = ["PLUS","MINUS","DIVIDE","MULTIPLY"]
 
-	if select_list is None:
-		return 
+    if select_list is None:
+        return 
 
 
-	for exp in select_list.tmp_exp_list:
-		if isinstance(exp,YRawColExp):
-			for tmp in table_list:
-				if tmp != exp.table_name:
-					continue
+    for exp in select_list.tmp_exp_list:
+        if isinstance(exp,YRawColExp):
+            for tmp in table_list:
+                if tmp != exp.table_name:
+                    continue
 
-				if column_in_table(exp.column_name,tmp):
-					tmp_bool = False
-					for x in new_exp_list:
-						if x.column_name == exp.column_name and x.table_name == tmp:
-							tmp_bool = True
-							break
+                if column_in_table(exp.column_name,tmp):
+                    tmp_bool = False
+                    for x in new_exp_list:
+                        if x.column_name == exp.column_name and x.table_name == tmp:
+                            tmp_bool = True
+                            break
 
-					if tmp_bool is False:
-						new_exp = copy.deepcopy(exp)
-						new_exp_list.append(new_exp)
-						new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
-					break
+                    if tmp_bool is False:
+                        new_exp = copy.deepcopy(exp)
+                        new_exp_list.append(new_exp)
+                        new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
+                    break
 
-			for tmp in table_alias_dict.keys():
-				if tmp != exp.table_name:
-					continue
+            for tmp in table_alias_dict.keys():
+                if tmp != exp.table_name:
+                    continue
 
-				if column_in_table(exp.column_name,table_alias_dict[tmp]):
-					tmp_bool = False
-					for x in new_exp_list:
-						if x.column_name == exp.column_name and x.table_name == tmp:
-							tmp_bool = True
-							break
+                if column_in_table(exp.column_name,table_alias_dict[tmp]):
+                    tmp_bool = False
+                    for x in new_exp_list:
+                        if x.column_name == exp.column_name and x.table_name == tmp:
+                            tmp_bool = True
+                            break
 
-					if tmp_bool is False:
-						new_exp = copy.deepcopy(exp)
-						new_exp_list.append(new_exp)
-						new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
-					break
+                    if tmp_bool is False:
+                        new_exp = copy.deepcopy(exp)
+                        new_exp_list.append(new_exp)
+                        new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
+                    break
 
-		elif isinstance(exp,YFuncExp):
-			col_list = []
-			__get_func_para__(exp,col_list)
-			for tmp in col_list:
-				if tmp.table_name not in table_list:
-					continue
+        elif isinstance(exp,YFuncExp):
+            col_list = []
+            __get_func_para__(exp,col_list)
+            for tmp in col_list:
+                if tmp.table_name not in table_list:
+                    continue
 
-				tmp_bool = False
-				for x in new_exp_list:
-					if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-						tmp_bool = True
-						break
+                tmp_bool = False
+                for x in new_exp_list:
+                    if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                        tmp_bool = True
+                        break
 
-				if tmp_bool is False:
-					new_exp = copy.deepcopy(tmp)
-					new_exp_list.append(new_exp)
-					new_select_dict[new_exp] = None
-			
+                if tmp_bool is False:
+                    new_exp = copy.deepcopy(tmp)
+                    new_exp_list.append(new_exp)
+                    new_select_dict[new_exp] = None
+            
 
-	return 
+    return 
 
 
 ##return all the YRawColExp in te YFuncExp
 #the col_list contains the reference, so the changing of col_list will also result a change in exp
 def __get_func_para__(exp,col_list):
-	
-	if not isinstance(exp,YFuncExp):
-		return
+    
+    if not isinstance(exp,YFuncExp):
+        return
 
-	for para in exp.parameter_list:
-		if isinstance(para,YRawColExp):
-			col_list.append(para)
+    for para in exp.parameter_list:
+        if isinstance(para,YRawColExp):
+            col_list.append(para)
 
-		elif isinstance(para,YFuncExp):
-			__get_func_para__(para,col_list)
+        elif isinstance(para,YFuncExp):
+            __get_func_para__(para,col_list)
 
 
 ## for join select_list pruning. add where and join_cond to the child's select_lsit
 def __add_func_to_select__(exp,table_list,table_alias_dict,new_dict,new_list):
 
-	bool_func_list = ["AND","OR"]	
+    bool_func_list = ["AND","OR"]   
 
-	if exp is None or not isinstance(exp,YFuncExp):
-		return
+    if exp is None or not isinstance(exp,YFuncExp):
+        return
 
-	if exp.func_name in bool_func_list:
-		for para in exp.parameter_list:
-			if isinstance(para,YFuncExp):
-				__add_func_to_select__(para,table_list,table_alias_dict,new_dict,new_list)
-			
-	else:
-		col_list = []
-		__get_func_para__(exp,col_list)
+    if exp.func_name in bool_func_list:
+        for para in exp.parameter_list:
+            if isinstance(para,YFuncExp):
+                __add_func_to_select__(para,table_list,table_alias_dict,new_dict,new_list)
+            
+    else:
+        col_list = []
+        __get_func_para__(exp,col_list)
 
-		for x in col_list:
-			if x.table_name not in table_list and x.table_name not in table_alias_dict.values():
-				continue
+        for x in col_list:
+            if x.table_name not in table_list and x.table_name not in table_alias_dict.values():
+                continue
 
-			tmp_bool = False
-			for tmp in new_list:
-				if tmp.table_name == x.table_name and tmp.column_name == x.column_name:
-					tmp_bool = True
-					break
+            tmp_bool = False
+            for tmp in new_list:
+                if tmp.table_name == x.table_name and tmp.column_name == x.column_name:
+                    tmp_bool = True
+                    break
 
-			if tmp_bool == False:
-				tmp_col = copy.deepcopy(x)
-				new_list.append(tmp_col)
-				new_dict[tmp_col] = None
+            if tmp_bool == False:
+                tmp_col = copy.deepcopy(x)
+                new_list.append(tmp_col)
+                new_dict[tmp_col] = None
 
 
 
 
 def column_filtering(tree):
-	math_func_list = ["PLUS","MINUS","DIVIDE","MULTIPLY"]
+    math_func_list = ["PLUS","MINUS","DIVIDE","MULTIPLY"]
 
-	if isinstance(tree,TableNode):
-		return
+    if isinstance(tree,TableNode):
+        return
 
-	elif isinstance(tree,GroupByNode):
-			
-		new_select_dict = {}
-		new_exp_list = []
+    elif isinstance(tree,GroupByNode):
+            
+        new_select_dict = {}
+        new_exp_list = []
 
-		if tree.group_by_clause is not None:
+        if tree.group_by_clause is not None:
 ### and all the columns in the groupby exp to its child's select_list
 
-			for exp in tree.group_by_clause.groupby_exp_list:
-				if isinstance(exp,YFuncExp):
-					col_list = []	
-					__get_func_para__(exp,col_list)
-					tmp_bool = False
-					for x in col_list:
-						for tmp in new_exp_list:
-							if x.table_name == tmp.table_name and x.column_name == tmp.column_name:
-								tmp_bool = True
-								break
+            for exp in tree.group_by_clause.groupby_exp_list:
+                if isinstance(exp,YFuncExp):
+                    col_list = []   
+                    __get_func_para__(exp,col_list)
+                    tmp_bool = False
+                    for x in col_list:
+                        for tmp in new_exp_list:
+                            if x.table_name == tmp.table_name and x.column_name == tmp.column_name:
+                                tmp_bool = True
+                                break
 
-						if tmp_bool is False:
-							new_exp = copy.deepcopy(x)
-							new_exp_list.append(new_exp)
-							new_select_dict[new_exp] = None
+                        if tmp_bool is False:
+                            new_exp = copy.deepcopy(x)
+                            new_exp_list.append(new_exp)
+                            new_select_dict[new_exp] = None
 
-				elif isinstance(exp,YRawColExp):
-					tmp_bool = False
-					for tmp in new_exp_list:
-						if tmp.table_name == exp.table_name and tmp.column_name == exp.column_name:
-							tmp_bool = True
-							break
+                elif isinstance(exp,YRawColExp):
+                    tmp_bool = False
+                    for tmp in new_exp_list:
+                        if tmp.table_name == exp.table_name and tmp.column_name == exp.column_name:
+                            tmp_bool = True
+                            break
 
-					if tmp_bool is False:
-						new_exp = copy.deepcopy(exp)
-						new_exp_list.append(new_exp)
-						new_select_dict[new_exp] = None
-				else:
-					new_exp = copy.deepcopy(exp)
-					new_exp_list.append(new_exp)
-					new_select_dict[new_exp] = None
+                    if tmp_bool is False:
+                        new_exp = copy.deepcopy(exp)
+                        new_exp_list.append(new_exp)
+                        new_select_dict[new_exp] = None
+                else:
+                    new_exp = copy.deepcopy(exp)
+                    new_exp_list.append(new_exp)
+                    new_select_dict[new_exp] = None
 
-		else:
-			print 1/0
+        else:
+            print 1/0
 
-		if tree.select_list is not None:
+        if tree.select_list is not None:
 
-			for exp in tree.select_list.tmp_exp_list:
-				if isinstance(exp,YRawColExp):
-					tmp_bool = False
-					for tmp in new_exp_list:
-						if not isinstance(tmp,YRawColExp):
-							continue
-						if tmp.column_name == exp.column_name and tmp.table_name == exp.table_name:
-							tmp_bool = True
-							break
+            for exp in tree.select_list.tmp_exp_list:
+                if isinstance(exp,YRawColExp):
+                    tmp_bool = False
+                    for tmp in new_exp_list:
+                        if not isinstance(tmp,YRawColExp):
+                            continue
+                        if tmp.column_name == exp.column_name and tmp.table_name == exp.table_name:
+                            tmp_bool = True
+                            break
 
-					if tmp_bool is False:
-						new_exp = copy.deepcopy(exp)
-						new_exp_list.append(new_exp)
-						new_select_dict[new_exp] = tree.select_list.dict_exp_and_alias[exp]
+                    if tmp_bool is False:
+                        new_exp = copy.deepcopy(exp)
+                        new_exp_list.append(new_exp)
+                        new_select_dict[new_exp] = tree.select_list.dict_exp_and_alias[exp]
 
-				elif isinstance(exp,YFuncExp):
+                elif isinstance(exp,YFuncExp):
 
-					col_list = []
-					__get_func_para__(exp,col_list)
-					for tmp in col_list:
-						tmp_bool = False
-						for x in new_exp_list:
-							if not isinstance(x,YRawColExp):
-								continue
-							if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
-								tmp_bool = True
-								break
+                    col_list = []
+                    __get_func_para__(exp,col_list)
+                    for tmp in col_list:
+                        tmp_bool = False
+                        for x in new_exp_list:
+                            if not isinstance(x,YRawColExp):
+                                continue
+                            if x.column_name == tmp.column_name and x.table_name == tmp.table_name:
+                                tmp_bool = True
+                                break
 
-						if tmp_bool is False:
-							new_exp = copy.deepcopy(tmp)
-							new_exp_list.append(new_exp)
-							new_select_dict[new_exp] = None
+                        if tmp_bool is False:
+                            new_exp = copy.deepcopy(tmp)
+                            new_exp_list.append(new_exp)
+                            new_select_dict[new_exp] = None
 
-		tree.child.select_list.dict_exp_and_alias = new_select_dict
-		tree.child.select_list.tmp_exp_list = new_exp_list
+        tree.child.select_list.dict_exp_and_alias = new_select_dict
+        tree.child.select_list.tmp_exp_list = new_exp_list
 
-		column_filtering(tree.child)
+        column_filtering(tree.child)
 
-	elif isinstance(tree,TwoJoinNode):
+    elif isinstance(tree,TwoJoinNode):
 
-		left_select_dict = {}
-		left_exp_list = []
-		__select_list_filter__(tree.select_list,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
+        left_select_dict = {}
+        left_exp_list = []
+        __select_list_filter__(tree.select_list,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
 
-		if tree.where_condition is not None:
-			__add_func_to_select__(tree.where_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
+        if tree.where_condition is not None:
+            __add_func_to_select__(tree.where_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
 
-		right_select_dict ={}
-		right_exp_list = []
-		__select_list_filter__(tree.select_list,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
+        right_select_dict ={}
+        right_exp_list = []
+        __select_list_filter__(tree.select_list,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
 
-		if tree.where_condition is not None:
-			__add_func_to_select__(tree.where_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
+        if tree.where_condition is not None:
+            __add_func_to_select__(tree.where_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
 
-		if tree.join_explicit is True:
-			__add_func_to_select__(tree.join_condition.on_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
-			__add_func_to_select__(tree.join_condition.on_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
-		elif tree.join_condition is not None:
-			__add_func_to_select__(tree.join_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
-			__add_func_to_select__(tree.join_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
-			
+        if tree.join_explicit is True:
+            __add_func_to_select__(tree.join_condition.on_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
+            __add_func_to_select__(tree.join_condition.on_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
+        elif tree.join_condition is not None:
+            __add_func_to_select__(tree.join_condition.where_condition_exp,tree.left_child.table_list,tree.left_child.table_alias_dict,left_select_dict,left_exp_list)
+            __add_func_to_select__(tree.join_condition.where_condition_exp,tree.right_child.table_list,tree.right_child.table_alias_dict,right_select_dict,right_exp_list)
+            
 
-		if tree.left_child.select_list is None:
-			tree.left_child.select_list = FirstStepSelectList(None)
+        if tree.left_child.select_list is None:
+            tree.left_child.select_list = FirstStepSelectList(None)
 
-		tree.left_child.select_list.dict_exp_and_alias = left_select_dict
-		tree.left_child.select_list.tmp_exp_list = left_exp_list
-		
-		if tree.right_child.select_list is None:
-			tree.right_child.select_list = FirstStepSelectList(None)
+        tree.left_child.select_list.dict_exp_and_alias = left_select_dict
+        tree.left_child.select_list.tmp_exp_list = left_exp_list
+        
+        if tree.right_child.select_list is None:
+            tree.right_child.select_list = FirstStepSelectList(None)
 
-		tree.right_child.select_list.dict_exp_and_alias = right_select_dict
-		tree.right_child.select_list.tmp_exp_list = right_exp_list
+        tree.right_child.select_list.dict_exp_and_alias = right_select_dict
+        tree.right_child.select_list.tmp_exp_list = right_exp_list
 
-		column_filtering(tree.left_child)
-		column_filtering(tree.right_child)
-	
-	elif isinstance(tree,SelectProjectNode):
+        column_filtering(tree.left_child)
+        column_filtering(tree.right_child)
+    
+    elif isinstance(tree,SelectProjectNode):
 
-		new_select_dict = {}
-		new_exp_list = []	
+        new_select_dict = {}
+        new_exp_list = []       
 
-		if tree.select_list is None or tree.child.select_list is None:
-			print 1/0
+        if tree.select_list is None or tree.child.select_list is None:
+            print 1/0
 ########don't change the select_list of the sp. it may be used when generating index
 
-		for exp in tree.select_list.tmp_exp_list:
-			if isinstance(exp,YRawColExp):
-				child_exp_list = tree.child.select_list.tmp_exp_list
-				child_exp_dict = tree.child.select_list.dict_exp_and_alias
-				for x in child_exp_list:
-					if isinstance(x,YRawColExp):
-						if child_exp_dict[x] == exp.column_name:
-							new_exp_list.append(x)
-							new_select_dict[x] = exp.column_name
-							break
+        for exp in tree.select_list.tmp_exp_list:
+            if isinstance(exp,YRawColExp):
+                child_exp_list = tree.child.select_list.tmp_exp_list
+                child_exp_dict = tree.child.select_list.dict_exp_and_alias
+                for x in child_exp_list:
+                    if isinstance(x,YRawColExp):
+                        if child_exp_dict[x] == exp.column_name:
+                            new_exp_list.append(x)
+                            new_select_dict[x] = exp.column_name
+                            break
 
-						if exp.column_name == x.column_name:
-							new_exp_list.append(x)
-							new_select_dict[x] = None
-							break
-					elif isinstance(x,YFuncExp):
-						if child_exp_dict[x] == exp.column_name:
-							new_exp_list.append(x)
-							new_select_dict[x] = None
-							break
+                        if exp.column_name == x.column_name:
+                            new_exp_list.append(x)
+                            new_select_dict[x] = None
+                            break
+                    elif isinstance(x,YFuncExp):
+                        if child_exp_dict[x] == exp.column_name:
+                            new_exp_list.append(x)
+                            new_select_dict[x] = None
+                            break
 
-			elif isinstance(exp,YFuncExp):
-				col_list = []
-				__get_func_para__(exp,col_list)
-				for tmp in col_list:
-					tmp.table_name = ""
+            elif isinstance(exp,YFuncExp):
+                col_list = []
+                __get_func_para__(exp,col_list)
+                for tmp in col_list:
+                    tmp.table_name = ""
 
-				new_exp_list.append(exp)
-				new_select_dict[exp] = None
+                new_exp_list.append(exp)
+                new_select_dict[exp] = None
 
-			else:
-				new_exp_list.append(exp)
-				new_select_dict[exp] = None
+            else:
+                new_exp_list.append(exp)
+                new_select_dict[exp] = None
 
 
-		tree.child.select_list.tmp_exp_list = new_exp_list
-		tree.child.select_list.dict_exp_and_alias = new_select_dict
+        tree.child.select_list.tmp_exp_list = new_exp_list
+        tree.child.select_list.dict_exp_and_alias = new_select_dict
 
-		column_filtering(tree.child)
+        column_filtering(tree.child)
 
 
 #for YRawColExp, get its table_name
 ## exp with column_name * doesn't have a table name
 def __gen_col_table_name__(exp,table_list,table_alias_dict):
-	
-	if isinstance(exp,YRawColExp) is False:
-		return
+    
+    if isinstance(exp,YRawColExp) is False:
+        return
 
-	if exp.table_name != "":
-		table_schema = lookup_a_table(exp.table_name)
-		if table_schema is None:
-			table_schema = lookup_a_table(table_alias_dict[exp.table_name])
-	
-		if table_schema is None:
-			print 1/0
+    if exp.table_name != "":
+        table_schema = lookup_a_table(exp.table_name)
+        if table_schema is None:
+            table_schema = lookup_a_table(table_alias_dict[exp.table_name])
+    
+        if table_schema is None:
+            print 1/0
 
-		exp.column_type = table_schema.get_column_type_by_name(exp.column_name)
-		return 
+        exp.column_type = table_schema.get_column_type_by_name(exp.column_name)
+        return 
 
-	if exp.column_name == "*":
-		return
+    if exp.column_name == "*":
+        return
 
-	col_res = lookup_a_column(exp.column_name)
+    col_res = lookup_a_column(exp.column_name)
 
-	for tmp in col_res:
-		if tmp.table_schema.table_name in table_list:
-			exp.table_name = tmp.table_schema.table_name
-			exp.column_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
-			return
+    for tmp in col_res:
+        if tmp.table_schema.table_name in table_list:
+            exp.table_name = tmp.table_schema.table_name
+            exp.column_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
+            return
 
-		for x  in table_alias_dict.keys():
-			if tmp.table_schema.table_name == table_alias_dict[x]:
-				exp.table_name = x
-				exp.column_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
-				return
+        for x  in table_alias_dict.keys():
+            if tmp.table_schema.table_name == table_alias_dict[x]:
+                exp.table_name = x
+                exp.column_type = tmp.table_schema.get_column_type_by_name(exp.column_name)
+                return
 
 def gen_table_name(tree):
 
-	if tree.select_list is not None:
-		exp_dict = tree.select_list.dict_exp_and_alias
-		for exp in exp_dict.keys():
-			if isinstance(exp,YRawColExp):
-				__gen_col_table_name__(exp,tree.table_list,tree.table_alias_dict)
+    if tree.select_list is not None:
+        exp_dict = tree.select_list.dict_exp_and_alias
+        for exp in exp_dict.keys():
+            if isinstance(exp,YRawColExp):
+                __gen_col_table_name__(exp,tree.table_list,tree.table_alias_dict)
 
-			elif isinstance(exp,YFuncExp):
-				col_list = []
-				__get_func_para__(exp,col_list)
-				for tmp in col_list:
-					__gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
+            elif isinstance(exp,YFuncExp):
+                col_list = []
+                __get_func_para__(exp,col_list)
+                for tmp in col_list:
+                    __gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
 
-	if tree.where_condition is not None:
-		col_list = []
-		__get_func_para__(tree.where_condition.where_condition_exp,col_list)
-		for tmp in col_list:
-			__gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
+    if tree.where_condition is not None:
+        col_list = []
+        __get_func_para__(tree.where_condition.where_condition_exp,col_list)
+        for tmp in col_list:
+            __gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
 
-	if isinstance(tree,TwoJoinNode):
-		if tree.join_explicit is True:
-			col_list = []
-			__get_func_para__(tree.join_condition.on_condition_exp,col_list)
-			for tmp in col_list:
-				__gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
+    if isinstance(tree,TwoJoinNode):
+        if tree.join_explicit is True:
+            col_list = []
+            __get_func_para__(tree.join_condition.on_condition_exp,col_list)
+            for tmp in col_list:
+                __gen_col_table_name__(tmp,tree.table_list,tree.table_alias_dict)
 
 
-	if isinstance(tree,GroupByNode):
-		if tree.group_by_clause is not None:
-			for exp in tree.group_by_clause.groupby_exp_list:
-				if isinstance(exp,YRawColExp):
-					__gen_col_table_name__(exp,tree.table_list,tree.table_alias_dict)
+    if isinstance(tree,GroupByNode):
+        if tree.group_by_clause is not None:
+            for exp in tree.group_by_clause.groupby_exp_list:
+                if isinstance(exp,YRawColExp):
+                    __gen_col_table_name__(exp,tree.table_list,tree.table_alias_dict)
 
-	if isinstance(tree,GroupByNode):
-		gen_table_name(tree.child)
+    if isinstance(tree,GroupByNode):
+        gen_table_name(tree.child)
 
-	elif isinstance(tree,SelectProjectNode):
-		gen_table_name(tree.child)
-	
-	elif isinstance(tree,TwoJoinNode):
-		gen_table_name(tree.left_child)
-		gen_table_name(tree.right_child)
+    elif isinstance(tree,SelectProjectNode):
+        gen_table_name(tree.child)
+    
+    elif isinstance(tree,TwoJoinNode):
+        gen_table_name(tree.left_child)
+        gen_table_name(tree.right_child)
 
 
 def handle_select_star(tree):
 
-	if tree.select_list is not None:
+    if tree.select_list is not None:
 
-		select_dict = tree.select_list.dict_exp_and_alias
-		exp_list = tree.select_list.tmp_exp_list
+        select_dict = tree.select_list.dict_exp_and_alias
+        exp_list = tree.select_list.tmp_exp_list
 
-		new_select_dict = {}
-		new_exp_list = []
+        new_select_dict = {}
+        new_exp_list = []
 
-		for exp in exp_list:
-			if isinstance(exp,YRawColExp):
-				if exp.column_name != "*":
-					new_exp = copy.deepcopy(exp)
-					new_exp_list.append(new_exp)
-					new_select_dict[new_exp] = select_dict[exp]
+        for exp in exp_list:
+            if isinstance(exp,YRawColExp):
+                if exp.column_name != "*":
+                    new_exp = copy.deepcopy(exp)
+                    new_exp_list.append(new_exp)
+                    new_select_dict[new_exp] = select_dict[exp]
 
-				else:
-					for tmp in tree.table_list:
-						table_schema = lookup_a_table(tmp)
-						if table_schema is None:
-							continue
+                else:
+                    for tmp in tree.table_list:
+                        table_schema = lookup_a_table(tmp)
+                        if table_schema is None:
+                            continue
 
-						for x in table_schema.column_list:
-							tmp_exp = YRawColExp(tmp,x.column_name)
-							new_exp_list.append(tmp_exp)
-							new_select_dict[tmp_exp] = None
+                        for x in table_schema.column_list:
+                            tmp_exp = YRawColExp(tmp,x.column_name)
+                            new_exp_list.append(tmp_exp)
+                            new_select_dict[tmp_exp] = None
 
-					for tmp in tree.table_alias_dict.keys():
-						table_schema = lookup_a_table(tree.table_alias_dict[tmp])
-						if table_schema is None:
-							continue
+                    for tmp in tree.table_alias_dict.keys():
+                        table_schema = lookup_a_table(tree.table_alias_dict[tmp])
+                        if table_schema is None:
+                            continue
 
-						for x in table_schema.column_list:
-							tmp_exp = YRawColExp(tmp,x.column_name)
-							new_exp_list.append(tmp_exp)
-							new_select_dict[tmp_exp] = None
+                        for x in table_schema.column_list:
+                            tmp_exp = YRawColExp(tmp,x.column_name)
+                            new_exp_list.append(tmp_exp)
+                            new_select_dict[tmp_exp] = None
 
-			elif isinstance(exp,YFuncExp):
-				if exp.func_name == "COUNT":
-					new_cons = YConsExp(1,"INTEGER")
-					para_list = []
-					para_list.append(new_cons)
-					new_func = YFuncExp(exp.func_name,para_list)
-					new_exp_list.append(new_func)
-					new_select_dict[new_func] = select_dict[exp]
-				else:
-					new_exp = copy.deepcopy(exp)
-					new_exp_list.append(new_exp)
-					new_select_dict[new_exp] = select_dict[exp]
+            elif isinstance(exp,YFuncExp):
+                if exp.func_name == "COUNT":
+                    new_cons = YConsExp(1,"INTEGER")
+                    para_list = []
+                    para_list.append(new_cons)
+                    new_func = YFuncExp(exp.func_name,para_list)
+                    new_exp_list.append(new_func)
+                    new_select_dict[new_func] = select_dict[exp]
+                else:
+                    new_exp = copy.deepcopy(exp)
+                    new_exp_list.append(new_exp)
+                    new_select_dict[new_exp] = select_dict[exp]
 
-			else:
-				new_exp = copy.deepcopy(exp)
-				new_exp_list.append(new_exp)
-				new_select_dict[new_exp] = select_dict[exp]
+            else:
+                new_exp = copy.deepcopy(exp)
+                new_exp_list.append(new_exp)
+                new_select_dict[new_exp] = select_dict[exp]
 
-		tree.select_list.dict_exp_and_alias = new_select_dict
-		tree.select_list.tmp_exp_list = new_exp_list
+        tree.select_list.dict_exp_and_alias = new_select_dict
+        tree.select_list.tmp_exp_list = new_exp_list
 
-	if isinstance(tree,TableNode):
-		return
+    if isinstance(tree,TableNode):
+        return
 
-	elif isinstance(tree,SelectProjectNode):
-		handle_select_star(tree.child)
+    elif isinstance(tree,SelectProjectNode):
+        handle_select_star(tree.child)
 
-	elif isinstance(tree,TwoJoinNode):
-		handle_select_star(tree.left_child)
-		handle_select_star(tree.right_child)
+    elif isinstance(tree,TwoJoinNode):
+        handle_select_star(tree.left_child)
+        handle_select_star(tree.right_child)
 
-	elif isinstance(tree,GroupByNode):
-		handle_select_star(tree.child)
+    elif isinstance(tree,GroupByNode):
+        handle_select_star(tree.child)
 
 
 def ysmart_tree_gen(schema,xml_file):
 
-    	process_schema_in_a_file(schema)
-	#debug_global_tables()
-	
-	node = execute_sql_in_a_file(xml_file)
+    process_schema_in_a_file(schema)
+    #debug_global_tables()
+    
+    thenode = get_the_select_node_from_a_file(xml_file)
 
-	gen_project_list(node)
+    node = build_plan_tree_from_a_select_node(thenode)
 
-	if check_schema(node) == -1:
-		return None
+    node.debug(1)
 
-	handle_select_star(node)
+    gen_project_list(node)
 
-	gen_table_name(node)
+    if check_schema(node) == -1:
+        return None
 
-	predicate_pushdown(node)
+    handle_select_star(node)
 
-	column_filtering(node)
+    gen_table_name(node)
 
-	gen_table_name(node)
+    predicate_pushdown(node)
 
-	gen_column_index(node)
-	
-	return node
-	
+    column_filtering(node)
+
+    gen_table_name(node)
+
+    gen_column_index(node)
+    
+    return node
 
