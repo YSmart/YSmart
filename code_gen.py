@@ -102,7 +102,6 @@ def __select_func_convert_to_java__(exp,buf_dict):
 		elif isinstance(para1,ystree.YFuncExp):
 			return_str += "("
 			return_str += __select_func_convert_to_java__(para1,buf_dict)
-			return_str += ")"
 
 		else:
 			#return_str += __para_to_java__(para1.cons_type,para1.cons_value,None)
@@ -512,8 +511,12 @@ def __groupby_gen_mr__(tree,fo):
 
 #####fix me here: how to generate ouput when the child is join
 	map_key = __gen_mr_key__(tree.child.select_list.tmp_exp_list[:gb_len],map_key_type,buf_dict)
-	map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list)
-	map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list,map_value_type,buf_dict)
+	if isinstance(tree.child,ystree.TableNode):
+		map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list)
+	else:
+### in this case, do nothing, just output all the input
+		map_value_type = "Text"
+		
 
 	
 	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+ map_key_type+","+map_value_type+">{\n"
@@ -523,8 +526,12 @@ def __groupby_gen_mr__(tree,fo):
 	print >>fo,"\t\t\tString line = value.toString();"
         print >>fo,"\t\t\tString[] "+ line_buffer + " = line.split(\"\\\|\");"
 
+	if isinstance(tree.child,ystree.TableNode):
+		map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list,map_value_type,buf_dict)
+	else:
+		map_value = "line"
 
-	if tree.child.where_condition is None:
+	if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
 		tmp_output = "\t\t\toutput.collect("
 		tmp_output += "new " + map_key_type + "(" + map_key +")"
 		tmp_output += ","
@@ -1044,7 +1051,7 @@ def __join_gen_mr__(tree,fo):
 
 	print >>fo,"\t\t\twhile(values.hasNext()){\n"
 	print >>fo,"\t\t\t\tString tmp = values.next().toString();"
-	print >>fo,"\t\t\t\tif(tmp.contains(\"L\")){\n"
+	print >>fo,"\t\t\t\tif(tmp.charAt(0) == \'L\'){\n"
 	
 	print >>fo,"\t\t\t\t\t"+ left_array + ".add(tmp.substring(2));"
 	
