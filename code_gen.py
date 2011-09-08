@@ -235,6 +235,8 @@ def __operator_to_java__(op_type,op_name,op_list):
 	return res_str
 
 
+
+#### translate the where exp to java. not for the groupby node
 def __where_convert_to_java__(exp,buf_dict):
 
 	return_str = ""	
@@ -278,6 +280,28 @@ def __where_convert_to_java__(exp,buf_dict):
 				tmp_list.append(tmp_str)
 
 			return_str = __operator_to_java__(op_type,exp.func_name,tmp_list)
+
+		else:
+			return_str += "("
+			if exp.func_name == "IS":
+				para1 = exp.parameter_list[0]
+				para2 = exp.parameter_list[1]
+
+				if isinstance(para1,ystree.YRawColExp):
+					return_str += buf_dict[para1.table_name] + "[" + str(para1.column_name) + "]"
+				else:
+					print 1/0
+
+				return_str +=  ".compareTo(\""
+
+				if isinstance(para2,ystree.YConsExp):
+					return_str += str(para2.cons_value)
+					return_str += "\") == 0"
+				else:
+					print 1/0
+
+				return_str += ")"
+				
 
 	elif isinstance(exp, ystree.YConsExp):
 		if exp.cons_type == "BOOLEAN":
@@ -472,6 +496,132 @@ def __tablenode_gen_mr__(tree,fo):
 ###
 	__gen_main__(tree,fo,map_key_type,map_value_type,map_key_type,map_value_type,False)
 
+def __orderby_gen_mr__(tree,fo):
+
+	line_buffer = "line_buf"
+
+	buf_dict = {}
+	for x in tree.table_list:
+		buf_dict[x] = line_buffer
+	
+	od_len = len(tree.order_by_clause.orderby_exp_list)
+
+	if isinstance(tree.child,ystree.TableNode):
+		map_key_type = __get_key_value_type__(tree.order_by_clause.orderby_exp_list)
+                map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list,map_value_type,buf_dict)
+		map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list)
+		map_key = __gen_mr_key__(tree.child.select_list.tmp_exp_list[:od_len],map_key_type,buf_dict)
+	else:
+		map_key = ""
+		for i in range(0,od_len):
+			map_key += line_buffer + "[" + str(i) + "] +"
+			map_key += "\"|\"+"
+		map_key = map_key[:-1]
+
+		map_key_type = "Text"
+
+		map_value = ""
+		for i in range(od_len,len(tree.child.select_list.tmp_exp_list)):
+			map_value += line_buffer + "[" + str(i) + "] +"
+			map_value += "\"|\"+"
+
+		map_value = map_value[:-1]
+
+		map_value_type = "Text"
+
+	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
+
+	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+ map_key_type + ","+map_value_type + "> output, Reporter reporter) throws IOException{\n"
+	
+	print >>fo,"\t\t\tString line = value.toString();"
+        print >>fo,"\t\t\tString[] "+ line_buffer +" = line.split(\"\\\|\");"
+
+        if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
+                tmp_output = "\t\t\toutput.collect("
+                tmp_output += "new " + map_key_type + "(" + map_key +")"
+                tmp_output += ","
+                tmp_output += "new " + map_value_type + "(" + map_value + ")"
+                tmp_output += ");"
+
+                print >>fo, tmp_output
+
+        else:
+                where_str = "\t\t\tif("
+                where_str +=__where_convert_to_java__(tree.child.where_condition.where_condition_exp,buf_dict)
+                where_str += "){\n"
+                print >>fo,where_str
+
+                tmp_output =  "\t\t\t\toutput.collect( "
+                tmp_output += "new " + map_key_type + "(" + map_key +")"
+                tmp_output += ","
+                tmp_output += "new " + map_value_type + "(" + map_value + ")"
+                tmp_output += ");"
+
+                print >>fo, tmp_output
+
+                print >>fo,"\t\t\t}" # end of if
+
+	print >>fo,"\t\t}\n"
+	print >>fo,"\t}\n"
+
+
+### reduce part
+
+	reduce_key_type = "NullWritable"
+        reduce_value_type = "Text"
+
+        print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
+
+        print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
+
+	print >>fo, "\t\t\tNullWritable key_op = NullWritable.get();"
+
+	print >>fo,"\t\t\twhile(values.hasNext()){\n"
+	
+	print >>fo, "\t\t\t\tString tmp = values.next().toString();"
+
+	print >>fo, "\t\t\t\toutput.collect(key_op,new Text(tmp));" 
+
+	print >>fo, "\t\t\t}\n"
+
+	print >>fo,"\t\t}\n"
+
+	print >>fo,"\t}\n"
+
+#### generate main	
+
+	key_spec = ""
+	for i in range(0,od_len):
+		k= i+1
+		key_spec += "-k" + str(k) + "," + str(k) 
+		exp = tree.order_by_clause.orderby_exp_list[i]
+		if exp.get_exp_type() in ["INTEGER","DECIMAL"]:
+			key_spec += "n"
+
+		order= tree.order_by_clause.order_indicator_list[i]
+		if order == "DESC":
+			key_spec += "r"
+		key_spec += " "
+
+	print >>fo,"\tpublic static void main(String[] args) throws Exception{\n"
+
+	print >>fo,"\t\tJobConf conf = new JobConf("+fo.name.split(".java")[0]+".class);"
+	print >>fo,"\t\tconf.setJobName(\"ysmart\");"
+	print >>fo,"\t\tconf.setMapOutputKeyClass(" + map_key_type+".class);"
+	print >>fo,"\t\tconf.setMapOutputValueClass(" + map_value_type+ ".class);"
+	print >>fo,"\t\tconf.setOutputKeyClass("+reduce_key_type+".class);"
+	print >>fo,"\t\tconf.setOutputValueClass("+reduce_value_type+".class);"
+	print >>fo,"\t\tconf.setMapperClass(Map.class);"
+	print >>fo,"\t\tconf.setReducerClass(Reduce.class);"
+	print >>fo,"\t\tconf.set(JobContext.MAP_OUTPUT_KEY_FIELD_SEPERATOR, \"|\");"
+	print >>fo,"\t\tconf.setKeyFieldComparatorOptions(\"" +key_spec + "\");"
+	print >>fo,"\t\tFileInputFormat.addInputPath(conf, new Path(args[0]));"
+	print >>fo,"\t\tFileOutputFormat.setOutputPath(conf, new Path(args[1]));"
+	print >>fo, "\t\tJobClient.runJob(conf);"
+
+        print >>fo,"\t}\n"
+
+
 def __groupby_func_name__(exp):
 	if not isinstance(exp,ystree.YFuncExp):
 		return None
@@ -617,19 +767,19 @@ def __groupby_gen_mr__(tree,fo):
 				pass
 
 			elif tmp_name == "MAX":
-				print >>fo,"\t\t\t\tif(!i)"
-				print >>fo,"\t\t\t\t\tresult[" + str(i) + "] = " + tmp_output + ";"
+				print >>fo,"\t\t\t\tif(al_line==0)"
+				print >>fo,"\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"
 				print >>fo,"\t\t\t\telse{"
-				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] > " + tmp_output + ")"
-				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = " + tmp_output + ";"  
+				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] < " + tmp_output + ")"
+				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"  
 				print >>fo, "\t\t\t\t}" 
 
 			elif tmp_name == "MIN":
 				print >>fo,"\t\t\t\tif(!i)"
 				print >>fo,"\t\t\t\t\tresult[" + str(i) + "] = " + tmp_output + ";"
 				print >>fo,"\t\t\t\telse{"
-				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] < " + tmp_output + ")"
-				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = " + tmp_output + ";"  
+				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] > " + tmp_output + ")"
+				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"  
 				print >>fo, "\t\t\t\t}" 
 
 	print >>fo, "\t\t\t\t" + line_array + "++;"
@@ -647,7 +797,7 @@ def __groupby_gen_mr__(tree,fo):
 					print >>fo, "\t\t\tresult[" + str(i) + "] = result[" + str(i) + "] /" + line_array+ ";" 
 
 			elif tmp_name == "COUNT":
-				print >>fo, "\t\t\tresult[" + str(i) + "] = "+ line_array + ";" 
+				print >>fo, "\t\t\tresult[" + str(i) + "] = (double)"+ line_array + ";" 
 	
 	for i in range(0,len(tree.select_list.tmp_exp_list)):
 		exp = tree.select_list.tmp_exp_list[i]
@@ -720,6 +870,10 @@ def __groupby_gen_mr__(tree,fo):
 		reduce_value = "\" \""
 
 	print >>fo, "\t\t\tNullWritable key_op = NullWritable.get();"
+	
+#########fix me here: how to handle groupby's where condition
+######## right now, the where condition is not translated.
+######## here it doesn't affect the correctness of the groupby result. 
 
 	#tmp_output = "\t\t\toutput.collect(new "+ reduce_key_type + "("+ reduce_key + ")" 
 	tmp_output = "\t\t\toutput.collect(key_op" 
@@ -842,26 +996,40 @@ def __gen_join_where__(cur_exp,table_name):
 
 		return ret_exp
 	else:
-		tmp_bool = True
 
+
+###fix me here: how to handle the first para if the func is IS 
 		if cur_exp.func_name == "IS":
-			print 1/0
-	
-		para1 = cur_exp.parameter_list[0]
-		para2 = cur_exp.parameter_list[1]
+			tmp_bool = True
 
-		if isinstance(para1,ystree.YRawColExp):
-			if para1.table_name != table_name:
-				tmp_bool = False
+			para1 = cur_exp.parameter_list[0]
+			if isinstance(para1,ystree.YRawColExp):
+				if para1.table_name != table_name:
+					tmp_bool = False			
 
-		if isinstance(para2,ystree.YRawColExp):
-			if para2.table_name != table_name:
-				tmp_bool = False
+			if tmp_bool == True:
+				ret_exp = copy.deepcopy(cur_exp)
+			else:
+				ret_exp = ystree.YConsExp("FALSE","BOOLEAN")
 
-		if tmp_bool == True:
-			ret_exp = copy.deepcopy(cur_exp)
 		else:
-			ret_exp = ystree.YConsExp("FALSE","BOOLEAN") 
+	
+			tmp_bool = True
+			para1 = cur_exp.parameter_list[0]
+			para2 = cur_exp.parameter_list[1]
+
+			if isinstance(para1,ystree.YRawColExp):
+				if para1.table_name != table_name:
+					tmp_bool = False
+
+			if isinstance(para2,ystree.YRawColExp):
+				if para2.table_name != table_name:
+					tmp_bool = False
+
+			if tmp_bool == True:
+				ret_exp = copy.deepcopy(cur_exp)
+			else:
+				ret_exp = ystree.YConsExp("FALSE","BOOLEAN") 
 
 		return  ret_exp
 
@@ -1101,7 +1269,7 @@ def __join_gen_mr__(tree,fo):
 
 				print >>fo, "\t\t\t\t\t\t\t",tmp_output
 
-				print >>fo,"\t\t\t\t\t\t}\n"
+				print >>fo,"\t\t\t\t\t\t}\n"  #### end of where condtion
 
 			else:
 				if tree.select_list is None:
@@ -1217,9 +1385,9 @@ def __join_gen_mr__(tree,fo):
 			print >>fo, "\t\t\t\t\t",tmp_output
 			
 
-	print >>fo,"\t\t\t\t}\n"
+		print >>fo,"\t\t\t\t}\n"
 
-	print >>fo,"\t\t\t}\n"
+		print >>fo,"\t\t\t}\n"
 
 
 	print >>fo,"\t\t}\n" #### end of  reduce func
@@ -1257,6 +1425,15 @@ def __tablenode_code_gen__(tree,fo):
 
 	print >>fo,"}\n"
 
+def __orderby_code_gen__(tree,fo):
+	__gen_des__(fo)
+	__gen_header__(fo)
+
+	print >>fo,"public class " +fo.name.split(".java")[0] + "{\n"
+
+	__orderby_gen_mr__(tree,fo)
+
+	print >>fo,"}\n"
 
 
 def __groupby_code_gen__(tree,fo):
@@ -1287,6 +1464,14 @@ def generate_code(tree,filename):
 	if isinstance(tree,ystree.TableNode):
 		print "TableNode code generating"
 		__tablenode_code_gen__(tree,fo)
+
+	elif isinstance(tree,ystree.OrderByNode):
+		print "OrderByNode code generating"
+		__orderby_code_gen__(tree,fo)
+		if not isinstance(tree.child,ystree.TableNode):
+			tmp_name = filename.split(".java")[0]
+			filename = tmp_name[:-1] + str(int(tmp_name[-1])+1) + ".java"
+			generate_code(tree.child,filename)
 
 	elif isinstance(tree,ystree.SelectProjectNode):
 		print "SelectProjectNode code generating"
