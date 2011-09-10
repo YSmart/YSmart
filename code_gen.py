@@ -250,7 +250,10 @@ def __where_convert_to_java__(exp,buf_dict):
 			for tmp_exp in exp.parameter_list:
 
 				if isinstance(tmp_exp,ystree.YRawColExp):
-					tmp_str = __para_to_java__(tmp_exp.column_type,tmp_exp.column_name,buf_dict[tmp_exp.table_name])
+					if tmp_exp.table_name != "AGG":
+						tmp_str = __para_to_java__(tmp_exp.column_type,tmp_exp.column_name,buf_dict[tmp_exp.table_name])
+					else:
+						tmp_str = buf_dict[tmp_exp.table_name] + "[" + str(tmp_exp.column_name) + "]"
 					tmp_list.append(tmp_str)
 					op_type = tmp_exp.column_type
 
@@ -595,7 +598,7 @@ def __orderby_gen_mr__(tree,fo):
 		k= i+1
 		key_spec += "-k" + str(k) + "," + str(k) 
 		exp = tree.order_by_clause.orderby_exp_list[i]
-		if exp.get_exp_type() in ["INTEGER","DECIMAL"]:
+		if exp.get_value_type() in ["INTEGER","DECIMAL"]:
 			key_spec += "n"
 
 		order= tree.order_by_clause.order_indicator_list[i]
@@ -634,8 +637,6 @@ def __groupby_func_name__(exp):
 			tmp_name = __groupby_func_name__(x) 
 			if tmp_name is not None:
 				return tmp_name
-
-
 
 def __groupby_gen_mr__(tree,fo):
 
@@ -714,7 +715,8 @@ def __groupby_gen_mr__(tree,fo):
 ###
 ### This is the reduce part
 ###
-	line_array = "al_line"
+	line_counter = "al_line"
+	agg_buffer = "result"
 
 	buf_dict = {}
 	for x in tree.table_list:
@@ -736,15 +738,15 @@ def __groupby_gen_mr__(tree,fo):
 	print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 	
 	print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
-	print >>fo, "\t\t\tDouble[] result = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];";	
+	print >>fo, "\t\t\tDouble[] "+agg_buffer+" = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];";	
 
-	print >>fo, "\t\t\tint " + line_array + " = 0;"
+	print >>fo, "\t\t\tint " + line_counter + " = 0;"
 	
 	print >>fo, "\t\t\tString tmp = \"\";"
 
 	print >>fo, "\t\t\tfor(int i=0;i<"+str(len(tree.select_list.tmp_exp_list))+";i++){\n"
 
-	print >>fo, "\t\t\t\tresult[i] = 0.0;"
+	print >>fo, "\t\t\t\t"+agg_buffer+"[i] = 0.0;"
 
 	print >>fo, "\t\t\t}\n"
 
@@ -761,28 +763,28 @@ def __groupby_gen_mr__(tree,fo):
 			tmp_output = __select_func_convert_to_java__(exp,buf_dict)
 			tmp_name = __groupby_func_name__(exp)
 			if tmp_name == "SUM" or tmp_name == "AVG":
-				print >>fo, "\t\t\t\tresult[" + str(i) + "] = result[" +str(i) + "] + " + tmp_output + ";" 
+				print >>fo, "\t\t\t\t"+agg_buffer+"[" + str(i) + "] = "+agg_buffer+"[" +str(i) + "] + " + tmp_output + ";" 
 
 			elif tmp_name == "COUNT":
 				pass
 
 			elif tmp_name == "MAX":
-				print >>fo,"\t\t\t\tif(al_line==0)"
-				print >>fo,"\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"
+				print >>fo,"\t\t\t\tif("+line_counter+"==0)"
+				print >>fo,"\t\t\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)" + tmp_output + ";"
 				print >>fo,"\t\t\t\telse{"
-				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] < " + tmp_output + ")"
-				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"  
+				print >>fo, "\t\t\t\t\tif("+agg_buffer+"[" + str(i) + "] < " + tmp_output + ")"
+				print >>fo, "\t\t\t\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)" + tmp_output + ";"  
 				print >>fo, "\t\t\t\t}" 
 
 			elif tmp_name == "MIN":
 				print >>fo,"\t\t\t\tif(!i)"
-				print >>fo,"\t\t\t\t\tresult[" + str(i) + "] = " + tmp_output + ";"
+				print >>fo,"\t\t\t\t\t"+agg_buffer+"[" + str(i) + "] = " + tmp_output + ";"
 				print >>fo,"\t\t\t\telse{"
-				print >>fo, "\t\t\t\t\tif(result[" + str(i) + "] > " + tmp_output + ")"
-				print >>fo, "\t\t\t\t\t\tresult[" + str(i) + "] = (double)" + tmp_output + ";"  
+				print >>fo, "\t\t\t\t\tif("+agg_buffer+"[" + str(i) + "] > " + tmp_output + ")"
+				print >>fo, "\t\t\t\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)" + tmp_output + ";"  
 				print >>fo, "\t\t\t\t}" 
 
-	print >>fo, "\t\t\t\t" + line_array + "++;"
+	print >>fo, "\t\t\t\t" + line_counter + "++;"
 	
 	print >>fo, "\t\t\t}\n"
 
@@ -794,15 +796,21 @@ def __groupby_gen_mr__(tree,fo):
 		if isinstance(exp,ystree.YFuncExp):
 			tmp_name = __groupby_func_name__(exp)
 			if tmp_name == "AVG":
-					print >>fo, "\t\t\tresult[" + str(i) + "] = result[" + str(i) + "] /" + line_array+ ";" 
+					print >>fo, "\t\t\t"+agg_buffer+"[" + str(i) + "] = "+agg_buffer+"[" + str(i) + "] /" + line_counter+ ";" 
 
 			elif tmp_name == "COUNT":
-				print >>fo, "\t\t\tresult[" + str(i) + "] = (double)"+ line_array + ";" 
+				print >>fo, "\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)"+ line_counter + ";" 
 	
 	for i in range(0,len(tree.select_list.tmp_exp_list)):
 		exp = tree.select_list.tmp_exp_list[i]
 		if not isinstance(exp,ystree.YRawColExp):
 			break
+
+	col_list = []
+	if tree.having_clause is not None:
+		ystree.__get_gb_list__(tree.having_clause.where_condition_exp,col_list)
+
+	having_len = len(col_list)
 
 	if i==0:
 
@@ -810,11 +818,11 @@ def __groupby_gen_mr__(tree,fo):
 
 		reduce_value = ""
 
-		for j in range(0,len(tree.select_list.tmp_exp_list)):
+		for j in range(0,len(tree.select_list.tmp_exp_list)-having_len):
 		#for j in range(1,len(tree.select_list.tmp_exp_list)):
 			exp = tree.select_list.tmp_exp_list[j]
 			if isinstance(exp,ystree.YFuncExp):
-				reduce_value += "result[" + str(j) + "]"
+				reduce_value += agg_buffer+"[" + str(j) + "]"
 				if reduce_value_type == "Text":
 					reduce_value += " + \"|\""
 				reduce_value += "+"
@@ -843,11 +851,11 @@ def __groupby_gen_mr__(tree,fo):
 
 		reduce_value = ""
 
-		for j in range(0,len(tree.select_list.tmp_exp_list)):
+		for j in range(0,len(tree.select_list.tmp_exp_list)-having_len):
 		#for j in range(i,len(tree.select_list.tmp_exp_list)):
 			exp = tree.select_list.tmp_exp_list[j]
 			if isinstance(exp,ystree.YFuncExp):
-				reduce_value += "result[" + str(j) + "]"
+				reduce_value += agg_buffer+"[" + str(j) + "]"
 				if reduce_value_type == "Text":
 					reduce_value += " + \"|\""
 				reduce_value += "+"
@@ -875,11 +883,26 @@ def __groupby_gen_mr__(tree,fo):
 ######## right now, the where condition is not translated.
 ######## here it doesn't affect the correctness of the groupby result. 
 
-	#tmp_output = "\t\t\toutput.collect(new "+ reduce_key_type + "("+ reduce_key + ")" 
-	tmp_output = "\t\t\toutput.collect(key_op" 
-	tmp_output += ","
-	tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
-	tmp_output += ");"
+	if tree.where_condition is not None:
+		buf_dict = {}
+		buf_dict["AGG"] = agg_buffer
+		buf_dict["NOAGG"] = line_buffer
+
+		tmp_output = "\t\t\tif("+ __where_convert_to_java__(tree.where_condition.where_condition_exp,buf_dict) + "){\n"
+		tmp_output += "\t\t\t\toutput.collect(key_op"
+		tmp_output += ","
+		tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+		tmp_output += ");"
+
+		tmp_output += "\t\t\t}\n"
+
+
+	else:
+		#tmp_output = "\t\t\toutput.collect(new "+ reduce_key_type + "("+ reduce_key + ")" 
+		tmp_output = "\t\t\toutput.collect(key_op" 
+		tmp_output += ","
+		tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+		tmp_output += ");"
 
 	print >>fo, tmp_output
 
