@@ -2493,7 +2493,7 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
 def __schema_select_list__(select_list,table_list,table_alias_dict):
     res = 0
-    select_func_list = ["SUM","AVG","COUNT","MAX","MIN","PLUS","MINUS","DIVIDE","MULTIPLY"]
+    select_func_list = ["SUM","AVG","COUNT","MAX","MIN","PLUS","MINUS","DIVIDE","MULTIPLY","COUNT_DISTINCT"]
     if select_list is None:
         return res
 
@@ -3070,11 +3070,16 @@ def predicate_pushdown(tree):
 ### check if all the where condition has been pushed down to the child 
             if tree.where_condition.where_condition_exp.has_groupby_func() is False:
                 tree.where_condition = None
-            elif tree.having_clause is not None:
+
+        if tree.having_clause is not None:
+            if tree.where_condition is None:
+                tree.where_condition = FirstStepWhereCondition(None)
+                tree.where_condition.where_condition_exp = copy.deepcopy(tree.having_clause.where_condition_exp)
+            else:
                 para_list = []
                 para_list.append(tree.where_condition.where_condition_exp)
                 para_list.append(tree.having_clause.where_condition_exp)
-                tree.where_condition.where_condition_exp = YFuncExp("AND",para_list) 
+                tree.where_condition.where_condition_exp = YFuncExp("AND",para_list)
 
         predicate_pushdown(tree.child)
 

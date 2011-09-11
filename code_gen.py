@@ -717,6 +717,7 @@ def __groupby_gen_mr__(tree,fo):
 ###
 	line_counter = "al_line"
 	agg_buffer = "result"
+	d_count_buffer = "d_count_buf"
 
 	buf_dict = {}
 	for x in tree.table_list:
@@ -738,7 +739,9 @@ def __groupby_gen_mr__(tree,fo):
 	print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 	
 	print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
-	print >>fo, "\t\t\tDouble[] "+agg_buffer+" = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];";	
+	print >>fo, "\t\t\tDouble[] "+agg_buffer+" = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];"	
+
+	print >>fo, "\t\t\tArrayList[] "+d_count_buffer+" = new ArrayList[" + str(len(tree.select_list.tmp_exp_list)) + "];"
 
 	print >>fo, "\t\t\tint " + line_counter + " = 0;"
 	
@@ -747,6 +750,8 @@ def __groupby_gen_mr__(tree,fo):
 	print >>fo, "\t\t\tfor(int i=0;i<"+str(len(tree.select_list.tmp_exp_list))+";i++){\n"
 
 	print >>fo, "\t\t\t\t"+agg_buffer+"[i] = 0.0;"
+
+	print >>fo, "\t\t\t\t" + d_count_buffer + "[i] = new ArrayList();"
 
 	print >>fo, "\t\t\t}\n"
 
@@ -767,6 +772,10 @@ def __groupby_gen_mr__(tree,fo):
 
 			elif tmp_name == "COUNT":
 				pass
+
+			elif tmp_name == "COUNT_DISTINCT":
+				print >>fo, "\t\t\t\tif("+d_count_buffer+"[" + str(i) + "].contains(" +tmp_output+  ") == false)"
+				print >>fo, "\t\t\t\t\t"+d_count_buffer+"[" + str(i) + "].add(" + tmp_output + ");" 
 
 			elif tmp_name == "MAX":
 				print >>fo,"\t\t\t\tif("+line_counter+"==0)"
@@ -800,6 +809,9 @@ def __groupby_gen_mr__(tree,fo):
 
 			elif tmp_name == "COUNT":
 				print >>fo, "\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)"+ line_counter + ";" 
+
+			elif tmp_name == "COUNT_DISTINCT":
+				print >>fo, "\t\t\t"+agg_buffer+ "[" + str(i) + "] = (double)"+d_count_buffer+"["+ str(i) +"].size();"  
 	
 	for i in range(0,len(tree.select_list.tmp_exp_list)):
 		exp = tree.select_list.tmp_exp_list[i]
