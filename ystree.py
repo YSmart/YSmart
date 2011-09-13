@@ -3270,7 +3270,6 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
     if exp is None: 
         return None
     
-    new_exp = YFuncExp(exp.func_name,exp.parameter_list)
 
     if isinstance(exp,YFuncExp):
         para_list = exp.parameter_list
@@ -3279,25 +3278,25 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
             if isinstance(para,YRawColExp):
                 if para.column_name == "*":
                     print  1/0
+                if para.table_name in table_list:    
+                    new_para = __gen_column_index__(para,table_list,table_alias_dict)
+                    if new_para is None:
+                        print "COlumn Index error.",para.column_name,table_list,table_alias_dict,exp.func_name
+                        print 1/0
 
-                new_para = __gen_column_index__(para,table_list,table_alias_dict)
-                if new_para is None:
-                    print "COlumn Index error.",para.column_name,table_list,table_alias_dict,exp.func_name
-                    print 1/0
-
-                new_para_list.append(new_para)
+                    new_para_list.append(new_para)
 
             elif isinstance(para,YFuncExp):
                 tmp_exp = __gen_func_index__(para,table_list,table_alias_dict)
                 if tmp_exp is None:
-                    print 1/0                               
+                    print 1/0 
 
                 new_para_list.append(tmp_exp)
             
             elif isinstance(para,YConsExp):
                 new_para_list.append(para)
 
-        new_exp.parameter_list = list(new_para_list)
+        new_exp = YFuncExp(exp.func_name,list(new_para_list))
 
     return new_exp
         
@@ -3497,6 +3496,7 @@ def gen_column_index(tree):
         left_select = None
         right_select = None
 
+        tree.table_list =[]
     ##      tree.table_alias_dict = []
 
 ##table_alias_dict is not changed. It is used to determine whether this is a self join
@@ -3508,7 +3508,7 @@ def gen_column_index(tree):
 
         elif tree.join_condition is not None:
             join_exp = tree.join_condition.where_condition_exp 
-
+        
         if tree.left_child.select_list is not None:
             left_select = tree.left_child.select_list.dict_exp_and_alias
             left_exp = tree.left_child.select_list.tmp_exp_list
@@ -3519,29 +3519,21 @@ def gen_column_index(tree):
             if join_exp is not None:
                 if isinstance(tree.left_child,TableNode):
                     if tree.join_explicit is True:
-                            tree.join_condition.on_condition_exp = __gen_func_index__(tree.join_condition.on_condition_exp,tree.table_list,tree.table_alias_dict)
-                            tree.table_list =[]
+                            tree.join_condition.on_condition_exp = __gen_func_index__(tree.join_condition.on_condition_exp,tree.left_child.table_list,tree.table_alias_dict)
                             col_list = []
                             __get_func_para__(tree.join_condition.on_condition_exp,col_list)
                             for x in col_list:
                                 if x.table_name in tree.left_child.table_list:
                                     x.table_name ="LEFT"
                                     tree.table_list.append("LEFT")
-                                else:
-                                    x.table_name = "RIGHT" 
-                                    tree.table_list.append("RIGHT")
                     elif tree.join_condition is not None:
-                    	tree.join_condition.where_condition_exp = __gen_func_index__(tree.join_condition.where_condition_exp,tree.table_list,tree.table_alias_dict)
-			tree.table_list = []
-			col_list = []
-			__get_func_para__(tree.join_condition.where_condition_exp,col_list)
+                    	tree.join_condition.where_condition_exp = __gen_func_index__(tree.join_condition.where_condition_exp,tree.left_child.table_list,tree.table_alias_dict)
+                        col_list = []
+                        __get_func_para__(tree.join_condition.where_condition_exp,col_list)
                         for x in col_list:
                             if x.table_name in tree.left_child.table_list:
                                 x.table_name ="LEFT"
                                 tree.table_list.append("LEFT")
-                            else:
-                                x.table_name = "RIGHT" 
-                                tree.table_list.append("RIGHT")
                 else:
                     col_list = []
                     __get_func_para__(join_exp,col_list)
@@ -3638,7 +3630,24 @@ def gen_column_index(tree):
                 col_list = []
                 __get_func_para__(join_exp,col_list)
 
-                if isinstance(tree.right_child,TableNode) is False:
+                if isinstance(tree.right_child,TableNode) is True:
+                    if tree.join_explicit is True:
+                            tree.join_condition.on_condition_exp = __gen_func_index__(tree.join_condition.on_condition_exp,tree.right_child.table_list,tree.table_alias_dict)
+                            col_list = []
+                            __get_func_para__(tree.join_condition.on_condition_exp,col_list)
+                            for x in col_list:
+                                if x.table_name in tree.right_child.table_list:
+                                    x.table_name ="RIGHT"
+                                    tree.table_list.append("RIGHT")
+                    elif tree.join_condition is not None:
+                    	tree.join_condition.where_condition_exp = __gen_func_index__(tree.join_condition.where_condition_exp,tree.right_child.table_list,tree.table_alias_dict)
+                        col_list = []
+                        __get_func_para__(tree.join_condition.where_condition_exp,col_list)
+                        for x in col_list:
+                            if x.table_name in tree.left_child.table_list:
+                                x.table_name ="RIGHT"
+                                tree.table_list.append("RIGHT")
+                else:
                         for tmp in col_list:
                             for x in right_exp:
                                 if isinstance(x,YRawColExp):
