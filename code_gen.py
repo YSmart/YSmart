@@ -1068,6 +1068,23 @@ def __gen_join_where__(cur_exp,table_name):
 
 		return  ret_exp
 
+###### whether it is a self join
+
+def __self_join__(tree):
+
+	if len(tree.table_alias_dict.values()) !=2:
+		return False
+
+	t_name1 = tree.table_alias_dict.values()[0]
+
+	t_name2 = tree.table_alias_dict.values()[1]
+
+	if t_name1 != t_name2:
+		return False
+
+	else:
+		return True
+
 
 def __join_gen_mr__(tree,fo):
 
@@ -1083,12 +1100,7 @@ def __join_gen_mr__(tree,fo):
 
 	self_join_bool = False
 
-	if len(tree.table_list) == 1:
-		self_join_bool = True
-
-	if len(tree.table_alias_dict.values()) == 2 and tree.table_alias_dict.values()[0] == tree.table_alias_dict.values()[1]:
-		self_join_bool = True 
-	
+	self_join_bool = __self_join__(tree)
 
 	left_name = ""
 	right_name = ""
@@ -1143,9 +1155,10 @@ def __join_gen_mr__(tree,fo):
         print >>fo,"\t\t\tString[] " + line_buffer + " = line.split(\"\\\|\");"
 	print >>fo,"\t\t\tString path = ((FileSplit)reporter.getInputSplit()).getPath().toString();"
 
-##fix me here: how to know the file name of the two input tables. here suppose their names contains  left and right separately
-	
-	print >>fo,"\t\t\tif(path.toUpperCase().contains(\""+left_name+"\")){\n"
+
+
+	if self_join_bool is False:
+		print >>fo,"\t\t\tif(path.toUpperCase().contains(\""+left_name+"\")){\n"
 
 	buf_dict = {}
 	buf_dict["LEFT"] = line_buffer
@@ -1189,7 +1202,8 @@ def __join_gen_mr__(tree,fo):
 
 			print >>fo,"\t\t\t\t}" # end of if
 
-	print >>fo,"\t\t\t}else{\n" ##end of left child
+	if self_join_bool is False:
+		print >>fo,"\t\t\t}else{\n" ##end of left child
 
 ### scan the input of the right child
 	buf_dict = {}
@@ -1228,7 +1242,8 @@ def __join_gen_mr__(tree,fo):
 
 			print >>fo,"\t\t\t\t}" # end of if
 
-	print >>fo,"\t\t\t}\n" ### end of right child
+	if self_join_bool is False:
+		print >>fo,"\t\t\t}\n"
 
 	print >>fo,"\t\t}\n" ### end of map func
 
