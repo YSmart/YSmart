@@ -3288,6 +3288,8 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
                         print 1/0
 
                     new_para_list.append(new_para)
+                else:
+                    new_para_list.append(para)
 
             elif isinstance(para,YFuncExp):
                 tmp_exp = __gen_func_index__(para,table_list,table_alias_dict)
@@ -3623,6 +3625,13 @@ def gen_column_index(tree):
                                     tree.table_list.append("LEFT")
                                 break
 
+        join_exp = None
+        if tree.join_explicit is True:
+            join_exp = tree.join_condition.on_condition_exp 
+
+        elif tree.join_condition is not None:
+            join_exp = tree.join_condition.where_condition_exp 
+
         if tree.right_child.select_list is not None:
             right_select = tree.right_child.select_list.dict_exp_and_alias
             right_exp = tree.right_child.select_list.tmp_exp_list
@@ -3647,7 +3656,7 @@ def gen_column_index(tree):
                         col_list = []
                         __get_func_para__(tree.join_condition.where_condition_exp,col_list)
                         for x in col_list:
-                            if x.table_name in tree.left_child.table_list:
+                            if x.table_name in tree.right_child.table_list:
                                 x.table_name ="RIGHT"
                                 tree.table_list.append("RIGHT")
                 else:
