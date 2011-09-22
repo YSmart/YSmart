@@ -15,6 +15,8 @@ bool_func_dict = {"AND":" && ","OR":" || "}
 
 rel_func_dict = {"EQ":" == ","GTH":" > ", "LTH":" < ","NOT_EQ":" != ","GEQ":" >= ","LEQ":" <= "}
 
+packagepath = "edu/ohiostate/cse/ysmart/"
+packagename = "edu.ohiostate.cse.ysmart"
 
 ################Function definion. For aggregate functions and user define functions
 
@@ -79,7 +81,7 @@ def __func_print__(fo):
 ### start translating
 
 ###__select_func_convert_to_java__ is mainly used to convert the math function in the select list into jave expression
-####input: @exp: the sql expression than you want to translate. If the exp is an agg operation, it will only return the jave exp of its argument
+####input: @exp: the sql expression than you want to translate. If the exp is an agg operation, it will return the jave exp of its argument
 ####
 
 def __select_func_convert_to_java__(exp,buf_dict):
@@ -153,7 +155,7 @@ def __select_func_convert_to_java__(exp,buf_dict):
 	
 
 	else:
-		print "user defined functioin not supported yet"
+		print "user defined functioin not supported yet",exp.func_name
 		print 1/0
 		
 	return return_str
@@ -350,6 +352,7 @@ def __gen_des__(fo):
 */\n"
 
 def __gen_header__(fo):
+	print >>fo, "package " + packagename + ";" 
 	print >>fo,"import java.io.IOException;"
 	print >>fo,"import java.util.*;"
 	print >>fo,"import java.text.*;"
@@ -429,6 +432,22 @@ def __gen_mr_value__(exp_list,type,buf_dict):
 
 	return res
 
+def __get_max_index__(exp_list):
+	ret = -1
+
+	for exp in exp_list:
+		if isinstance(exp,ystree.YRawColExp):
+			if ret < int(exp.column_name):
+				ret = int(exp.column_name)
+		elif isinstance(exp,ystree.YFuncExp):
+			col_list = []
+			ystree.__get_func_para__(exp,col_list)
+			for x in col_list:
+				if ret< int(x.column_name):
+					ret = int(x.column_name)
+	ret = ret +1
+	return ret
+
 
 def __tablenode_gen_mr__(tree,fo):
 
@@ -451,13 +470,26 @@ def __tablenode_gen_mr__(tree,fo):
 	map_value_type = __get_key_value_type__(tree.select_list.tmp_exp_list)	
 	map_value = __gen_mr_value__(tree.select_list.tmp_exp_list,map_value_type,buf_dict)
 
+	max_index = __get_max_index__(tree.select_list.tmp_exp_list) 
+
 
 	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
 
 	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+ map_key_type + ","+map_value_type + "> output, Reporter reporter) throws IOException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
-        print >>fo,"\t\t\tString[] "+ line_buffer +" = line.split(\"\\\|\");"
+
+	print >>fo,"\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+	print >>fo, "\t\t\tint prev=0,i=0,n=0;"
+	print >>fo, "\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+	print >>fo, "\t\t\t\tif (line.charAt(i) == \'|\'){"
+	print >>fo, "\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+	print >>fo, "\t\t\t\t\tn = n+1;"
+	print >>fo, "\t\t\t\t\tprev = i+1;"
+	print >>fo, "\t\t\t\t}"
+	print >>fo, "\t\t\t\tif(n == "+str(max_index)+")"
+	print >>fo, "\t\t\t\t\tbreak;"
+	print >>fo,"\t\t\t}\n"
 
 	if tree.where_condition is None:
 		print >>fo,"\t\t\tNullWritable key_op = NullWritable.get();"
@@ -514,6 +546,7 @@ def __orderby_gen_mr__(tree,fo):
                 map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list,map_value_type,buf_dict)
 		map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list)
 		map_key = __gen_mr_key__(tree.child.select_list.tmp_exp_list[:od_len],map_key_type,buf_dict)
+		max_index = __get_max_index__(tree.child.select_list.tmp_exp_list)
 	else:
 		map_key = ""
 		for i in range(0,od_len):
@@ -531,13 +564,26 @@ def __orderby_gen_mr__(tree,fo):
 		map_value = map_value[:-1]
 
 		map_value_type = "Text"
+		max_index = len(tree.child.select_list.tmp_exp_list)
+
 
 	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
 
 	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+ map_key_type + ","+map_value_type + "> output, Reporter reporter) throws IOException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
-        print >>fo,"\t\t\tString[] "+ line_buffer +" = line.split(\"\\\|\");"
+
+	print >>fo,"\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+	print >>fo, "\t\t\tint prev=0,i=0,n=0;"
+	print >>fo, "\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+	print >>fo, "\t\t\t\tif (line.charAt(i) == \'|\'){"
+	print >>fo, "\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+	print >>fo, "\t\t\t\t\tn = n+1;"
+	print >>fo, "\t\t\t\t\tprev = i+1;"
+	print >>fo, "\t\t\t\t}"
+	print >>fo, "\t\t\t\tif(n == "+str(max_index)+")"
+	print >>fo, "\t\t\t\t\tbreak;"
+	print >>fo,"\t\t\t}\n"
 
         if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
                 tmp_output = "\t\t\toutput.collect("
@@ -657,30 +703,51 @@ def __groupby_gen_mr__(tree,fo):
 	if tree.group_by_clause is None:
 		print 1/0
 	else:
-		map_key_type = __get_key_value_type__(tree.group_by_clause.groupby_exp_list)
 		gb_len = len(tree.group_by_clause.groupby_exp_list)
 
-#####fix me here: how to generate ouput when the child is join
-	map_key = __gen_mr_key__(tree.child.select_list.tmp_exp_list[:gb_len],map_key_type,buf_dict)
+	exp_list = list(tree.child.select_list.tmp_exp_list)
 	if isinstance(tree.child,ystree.TableNode):
-		map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list)
+		map_key_type = __get_key_value_type__(tree.group_by_clause.groupby_exp_list)
+		map_key = __gen_mr_key__(tree.child.select_list.tmp_exp_list[:gb_len],map_key_type,buf_dict)
+		map_value_type = __get_key_value_type__(tree.child.select_list.tmp_exp_list[gb_len:])
+		map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list[gb_len:],map_value_type,buf_dict)
+		if tree.child.where_condition is not None:
+			exp_list.append(tree.child.where_condition.where_condition_exp)
+		max_index = __get_max_index__(exp_list)
 	else:
 ### in this case, do nothing, just output all the input
+		map_key = ""
+		map_key_type = "Text"
+		for i in range(0,gb_len):
+			map_key += line_buffer + "[" + str(i) + "]" + "+ \"|\"+"
+		map_key = map_key[:-1]
+
 		map_value_type = "Text"
+		map_value = ""
+		for i in range(gb_len,len(tree.child.select_list.tmp_exp_list)):
+			map_value += line_buffer + "[" + str(i) + "]" + "+ \"|\"+"
+		map_value = map_value[:-1]
+		max_index = len(tree.child.select_list.tmp_exp_list)
 		
 
-	
+
 	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+ map_key_type+","+map_value_type+">{\n"
 
 	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+map_key_type+","+map_value_type+"> output, Reporter reporter) throws IOException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
-        print >>fo,"\t\t\tString[] "+ line_buffer + " = line.split(\"\\\|\");"
+	print >>fo,"\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+	print >>fo, "\t\t\tint prev=0,i=0,n=0;"
+	print >>fo, "\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+	print >>fo, "\t\t\t\tif (line.charAt(i) == \'|\'){"
+	print >>fo, "\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+	print >>fo, "\t\t\t\t\tn = n+1;"
+	print >>fo, "\t\t\t\t\tprev = i+1;"
+	print >>fo, "\t\t\t\t}"
+	print >>fo, "\t\t\t\tif(n == "+str(max_index)+")"
+	print >>fo, "\t\t\t\t\tbreak;"
+	print >>fo,"\t\t\t}\n"
 
-	if isinstance(tree.child,ystree.TableNode):
-		map_value = __gen_mr_value__(tree.child.select_list.tmp_exp_list,map_value_type,buf_dict)
-	else:
-		map_value = "line"
 
 	if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
 		tmp_output = "\t\t\toutput.collect("
@@ -759,6 +826,13 @@ def __groupby_gen_mr__(tree,fo):
 	
 	print >>fo, "\t\t\t\ttmp = values.next().toString();"
 
+	if map_key_type == "Text":
+
+		print >>fo, "\t\t\t\ttmp = key.toString().concat(tmp);"
+
+	else:
+		print >>fo, "\t\t\t\ttmp = key.toString().concat(\"|\" + tmp);"
+
 	print >>fo, "\t\t\t\tString[] " + line_buffer + " = tmp.split(\"\\\|\");"
 
 
@@ -826,8 +900,6 @@ def __groupby_gen_mr__(tree,fo):
 
 	if i==0:
 
-		reduce_key = "result[0]"
-
 		reduce_value = ""
 
 		for j in range(0,len(tree.select_list.tmp_exp_list)-having_len):
@@ -858,8 +930,6 @@ def __groupby_gen_mr__(tree,fo):
 		buf_dict = {}
 		for x in tree.table_list:
 			buf_dict[x] = line_buffer
-
-		reduce_key = __gen_mr_key__(tree.select_list.tmp_exp_list[:i],reduce_key_type,buf_dict)
 
 		reduce_value = ""
 
@@ -1072,6 +1142,12 @@ def __gen_join_where__(cur_exp,table_name):
 
 def __self_join__(tree):
 
+	if not isinstance(tree.left_child,ystree.TableNode):
+		return False
+
+	if not isinstance(tree.right_child,ystree.TableNode):
+		return False
+
 	if len(tree.table_alias_dict.values()) !=2:
 		return False
 
@@ -1086,7 +1162,7 @@ def __self_join__(tree):
 		return True
 
 
-def __join_gen_mr__(tree,fo):
+def __join_gen_mr__(tree,left_name,fo):
 
 ###
 ###	This is the map part
@@ -1102,18 +1178,6 @@ def __join_gen_mr__(tree,fo):
 
 	self_join_bool = __self_join__(tree)
 
-	left_name = ""
-	right_name = ""
-
-	if isinstance(tree.left_child,ystree.TableNode):
-		left_name = tree.left_child.table_name
-	else:	
-		left_name = "LEFT"
-
-	if isinstance(tree.right_child,ystree.TableNode):
-		right_name = tree.right_child.table_name
-	else:
-		right_name = "RIGHT"
 
 ### get map output key
 
@@ -1123,7 +1187,7 @@ def __join_gen_mr__(tree,fo):
 	if tree.join_explicit is True:
 		__get_join_key__(tree.join_condition.on_condition_exp,left_key_list,"LEFT")
 		__get_join_key__(tree.join_condition.on_condition_exp,right_key_list,"RIGHT")
-	else:
+	elif tree.join_condition is not None:
 		__get_join_key__(tree.join_condition.where_condition_exp,left_key_list,"LEFT")
 		__get_join_key__(tree.join_condition.where_condition_exp,right_key_list,"RIGHT")
 
@@ -1144,21 +1208,64 @@ def __join_gen_mr__(tree,fo):
 		print 1/0
 
 	map_key_type = left_key_type 
-	map_value_type = "Text"  ## we need to add tag to differentiate left table and right table
-
+	map_value_type = "Text"  ## we need to add tag to differentiate the data from left table and right table
 	
 	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
+	print >>fo, "\t\tprivate int left = 0;"
+	print >>fo, "\t\tpublic void configure(JobConf job){\n"
+	print >>fo, "\t\t\tint last_index = -1, start_index = -1;"
+	print >>fo, "\t\t\tString path = job.get(\"map.input.file\");"
+	print >>fo, "\t\t\tlast_index = path.lastIndexOf(\'/\');"
+	print >>fo,"\t\t\tlast_index = last_index - 1;"
+	print >>fo, "\t\t\tstart_index = path.lastIndexOf(\'/\',last_index);"
+	print >>fo, "\t\t\tString f_name = path.substring(start_index+1,last_index+1);"
+	print >>fo, "\t\t\tif(f_name.compareTo(\"" + left_name + "\") == 0 )"
+	print >>fo, "\t\t\t\tleft = 1;"
+	print >>fo,"\t\t}" ### end of configure
 
 	print >>fo,"\t\tpublic void map(Object key, Text value,OutputCollector<"+map_key_type+","+map_value_type+"> output, Reporter reporter) throws IOException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
-        print >>fo,"\t\t\tString[] " + line_buffer + " = line.split(\"\\\|\");"
-	print >>fo,"\t\t\tString path = ((FileSplit)reporter.getInputSplit()).getPath().toString();"
-
-
+        
+	print >>fo, "\t\t\tint prev=0,i=0,n=0;"
 
 	if self_join_bool is False:
-		print >>fo,"\t\t\tif(path.toUpperCase().contains(\""+left_name+"\")){\n"
+		print >>fo,"\t\t\tif(this.left == 1){\n"
+
+
+	else:
+		if isinstance(tree.left_child,ystree.TableNode):
+			exp_list = list(tree.left_child.select_list.tmp_exp_list)
+			if tree.left_child.where_condition is not None:
+				exp_list.append(tree.left_child.where_condition.where_condition_exp)
+			tmp1 = __get_max_index__(exp_list)
+		else:
+			tmp1 = len(tree.left_child.select_list.tmp_exp_list)
+
+		if isinstance(tree.right_child,ystree.TableNode):
+			exp_list = list(tree.right_child.select_list.tmp_exp_list)
+			if tree.right_child.where_condition is not None:
+				exp_list.append(tree.right_child.where_condition.where_condition_exp)
+			tmp2 = __get_max_index__(exp_list)
+		else:
+			tmp2 = len(tree.right_child.select_list.tmp_exp_list)
+
+		if tmp1>tmp2:
+			max_index = tmp1
+		else:
+			max_index = tmp2
+
+        	print >>fo,"\t\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+		print >>fo, "\t\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+		print >>fo, "\t\t\t\t\tif (line.charAt(i) == \'|\'){"
+		print >>fo, "\t\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+		print >>fo, "\t\t\t\t\t\tn = n+1;"
+		print >>fo, "\t\t\t\t\t\tprev = i+1;"
+		print >>fo, "\t\t\t\t\t}"
+		print >>fo, "\t\t\t\t\tif(n == "+str(max_index)+")"
+		print >>fo, "\t\t\t\t\t\tbreak;"
+		print >>fo,"\t\t\t\t}\n"
+
 
 	buf_dict = {}
 	buf_dict["LEFT"] = line_buffer
@@ -1177,9 +1284,34 @@ def __join_gen_mr__(tree,fo):
 	
 	if tree.left_child.select_list is not None:
 
-		left_value = __gen_mr_value__(tree.left_child.select_list.tmp_exp_list,left_value_type,buf_dict)
+		
+		if isinstance(tree.left_child,ystree.TableNode):
+			left_value = __gen_mr_value__(tree.left_child.select_list.tmp_exp_list,left_value_type,buf_dict)
+			exp_list = list(tree.left_child.select_list.tmp_exp_list)
+			if tree.left_child.where_condition is not None:
+				exp_list.append(tree.left_child.where_condition.where_condition_exp)
+			max_index = __get_max_index__(exp_list)
+		else:
+			left_value = ""
+			for i in range(0,len(tree.left_child.select_list.tmp_exp_list)):
+				left_value += line_buffer + "[" + str(i) + "]"
+				left_value += "+ \"|\"+"
+			left_value = left_value[:-1]
+			max_index = len(tree.left_child.select_list.tmp_exp_list)
+		
+		if self_join_bool is False:
+			print >>fo,"\t\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+			print >>fo, "\t\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+			print >>fo, "\t\t\t\t\tif (line.charAt(i) == \'|\'){"
+			print >>fo, "\t\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+			print >>fo, "\t\t\t\t\t\tn = n+1;"
+			print >>fo, "\t\t\t\t\t\tprev = i+1;"
+			print >>fo, "\t\t\t\t\t}"
+			print >>fo, "\t\t\t\t\tif(n == "+str(max_index)+")"
+			print >>fo, "\t\t\t\t\t\tbreak;"
+			print >>fo,"\t\t\t\t}\n"
 
-		if tree.left_child.where_condition is None:
+		if not isinstance(tree.left_child,ystree.TableNode) or tree.left_child.where_condition is None:
 			tmp_output = "\t\t\t\toutput.collect(new " + left_key_type + "(" + left_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + left_value_type + "(\"L\"+\"|\" +"+ left_value +")"
@@ -1217,9 +1349,34 @@ def __join_gen_mr__(tree,fo):
 
 	if tree.right_child.select_list is not None:
 
-		right_value = __gen_mr_value__(tree.right_child.select_list.tmp_exp_list,right_value_type,buf_dict)
+		if isinstance(tree.right_child,ystree.TableNode):
+			right_value = __gen_mr_value__(tree.right_child.select_list.tmp_exp_list,right_value_type,buf_dict)
+			exp_list = tree.right_child.select_list.tmp_exp_list
+			if tree.right_child.where_condition is not None:
+				exp_list.append(tree.right_child.where_condition.where_condition_exp)
+			max_index = __get_max_index__(exp_list)
+		else:
+			right_value = ""
+			for i in range(0,len(tree.right_child.select_list.tmp_exp_list)):
+				right_value += line_buffer + "[" + str(i) + "]"
+				right_value += "+ \"|\"+"
+			right_value  = right_value[:-1]
+
+			max_index = len(tree.right_child.select_list.tmp_exp_list)
+
+		if self_join_bool is False:
+			print >>fo,"\t\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
+			print >>fo, "\t\t\t\tfor(i=0,n=0,prev=0;i<line.length();i++){\n"
+			print >>fo, "\t\t\t\t\tif (line.charAt(i) == \'|\'){"
+			print >>fo, "\t\t\t\t\t\t" + line_buffer + "[n] = line.substring(prev,i);"
+			print >>fo, "\t\t\t\t\t\tn = n+1;"
+			print >>fo, "\t\t\t\t\t\tprev = i+1;"
+			print >>fo, "\t\t\t\t\t}"
+			print >>fo, "\t\t\t\t\tif(n == "+str(max_index)+")"
+			print >>fo, "\t\t\t\t\t\tbreak;"
+			print >>fo,"\t\t\t\t}\n"
 			
-		if tree.right_child.where_condition is  None:
+		if not isinstance(tree.right_child,ystree.TableNode) or tree.right_child.where_condition is  None:
 			tmp_output = "\t\t\t\toutput.collect(new " + right_key_type + "(" + right_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + right_value_type + "(\"R\"+\"|\" +"+ right_value +")"
@@ -1449,9 +1606,11 @@ def __join_gen_mr__(tree,fo):
 
 def __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_value_type,reduce_bool):
 	print >>fo,"\tpublic static void main(String[] args) throws Exception{\n"
+	jobname = fo.name.split(".java")[0]
+	io_path = ""
 
-	print >>fo,"\t\tJobConf conf = new JobConf("+fo.name.split(".java")[0]+".class);"
-	print >>fo,"\t\tconf.setJobName(\"ysmart\");"
+	print >>fo,"\t\tJobConf conf = new JobConf("+jobname+".class);"
+	print >>fo,"\t\tconf.setJobName(\""+jobname+"\");"
 	print >>fo,"\t\tconf.setMapOutputKeyClass(" + map_key_type+".class);"
 	print >>fo,"\t\tconf.setMapOutputValueClass(" + map_value_type+ ".class);"
 	print >>fo,"\t\tconf.setOutputKeyClass("+reduce_key_type+".class);"
@@ -1459,8 +1618,14 @@ def __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_valu
 	print >>fo,"\t\tconf.setMapperClass(Map.class);"
 	if reduce_bool is True:
 		print >>fo,"\t\tconf.setReducerClass(Reduce.class);"
-	print >>fo,"\t\tFileInputFormat.addInputPath(conf, new Path(args[0]));"
-	print >>fo,"\t\tFileOutputFormat.setOutputPath(conf, new Path(args[1]));"
+	if isinstance(tree,ystree.TwoJoinNode):
+		print>>fo, "\t\tFileInputFormat.addInputPath(conf,new Path(args[0]));"
+		print>>fo, "\t\tFileInputFormat.addInputPath(conf,new Path(args[1]));"
+		io_path = "args[2]"
+	else:
+		io_path = "args[1]"
+		print >>fo,"\t\tFileInputFormat.addInputPath(conf, new Path(args[0]));"
+	print >>fo,"\t\tFileOutputFormat.setOutputPath(conf, new Path("+io_path+"));"
 	print >>fo, "\t\tJobClient.runJob(conf);"
 
 	print >>fo,"\t}\n"
@@ -1497,79 +1662,192 @@ def __groupby_code_gen__(tree,fo):
 	print >>fo, "}\n"
 
 
-def __join_code_gen__(tree,fo):
+def __join_code_gen__(tree,left_name,fo):
 	__gen_des__(fo)
 	__gen_header__(fo)
 	print >>fo,"public class "+fo.name.split(".java")[0]+"{\n"
 
-	__join_gen_mr__(tree,fo)
+	__join_gen_mr__(tree,left_name,fo)
 	print >>fo, "}\n"
 
 
 def generate_code(tree,filename):
 
-	fo = open(filename,"w")
+	op_name = filename + ".java"
+
+	fo = open(op_name,"w")
 	
 
 	if isinstance(tree,ystree.TableNode):
-		print "TableNode code generating"
 		__tablenode_code_gen__(tree,fo)
 
 	elif isinstance(tree,ystree.OrderByNode):
-		print "OrderByNode code generating"
 		__orderby_code_gen__(tree,fo)
 		if not isinstance(tree.child,ystree.TableNode):
-			tmp_name = filename.split(".java")[0]
-			filename = tmp_name[:-1] + str(int(tmp_name[-1])+1) + ".java"
+			filename = filename[:-1] + str(int(filename[-1])+1)
 			generate_code(tree.child,filename)
 
 	elif isinstance(tree,ystree.SelectProjectNode):
-		print "SelectProjectNode code generating"
 		generate_code(tree.child,filename)
 
 	elif isinstance(tree,ystree.GroupByNode):
-		print "GroupByNode code generating"
 		__groupby_code_gen__(tree,fo)
 		if not isinstance(tree.child,ystree.TableNode):
-			tmp_name = filename.split(".java")[0]
-			filename = tmp_name[:-1] + str(int(tmp_name[-1])+1) + ".java"
+			filename = filename[:-1] + str(int(filename[-1])+1) 
 			generate_code(tree.child,filename)
 
 	elif isinstance(tree,ystree.TwoJoinNode):
-		print "TwoJoinNode"
-		__join_code_gen__(tree,fo)
 
 		if not isinstance(tree.left_child,ystree.TableNode):
-			tmp_name = filename.split(".java")[0]
-			new_name = tmp_name[:-1] + "LEFT" +str(int(tmp_name[-1])+1) + ".java"
+			new_name = filename[:-1] + "LEFT" +str(int(filename[-1])+1)
+			__join_code_gen__(tree,new_name,fo)
 			generate_code(tree.left_child,new_name)
 
+		else:
+			__join_code_gen__(tree,tree.left_child.table_name,fo)
+
 		if not isinstance(tree.right_child,ystree.TableNode):
-			tmp_name = filename.split(".java")[0]
-			new_name = tmp_name[:-1] + "RIGHT" + str(int(tmp_name[-1])+1) + ".java"
+			new_name = filename[:-1] + "RIGHT" + str(int(filename[-1])+1)
 			generate_code(tree.right_child,new_name)
 
-	fo.close()	
+	fo.close()
+
+def compile_class(tree,codedir,package_path,filename):
+
+	cmd = "javac -classpath $HADOOP_HOME//hadoop-common-0.21.0.jar:$HADOOP_HOME/hadoop-hdfs-0.21.0.jar:$HADOOP_HOME/hadoop-mapred-0.21.0.jar " 
+	cmd += codedir + "/" + filename + ".java -d ." 
+	os.system(cmd)
+
+
+	if isinstance(tree,ystree.TableNode):
+		return
+	
+	elif isinstance(tree,ystree.OrderByNode):
+		if not isinstance(tree.child,ystree.TableNode):
+			filename = filename[:-1] + str(int(filename[-1])+1) 
+			compile_class(tree.child,codedir,package_path,filename)
+
+	elif isinstance(tree,ystree.SelectProjectNode):
+		compile_class(tree.child,codedir,package_path,filename)
+
+	elif isinstance(tree,ystree.GroupByNode):
+		if not isinstance(tree.child,ystree.TableNode):
+			filename = filename[:-1] + str(int(filename[-1])+1) 
+			compile_class(tree.child,codedir,package_path,filename)
+
+	elif isinstance(tree,ystree.TwoJoinNode):
+		if not isinstance(tree.left_child,ystree.TableNode):
+			new_name = filename[:-1] + "LEFT" +str(int(filename[-1])+1)
+			compile_class(tree.left_child,codedir,package_path,new_name)
+
+		if not isinstance(tree.right_child,ystree.TableNode):
+			new_name = filename[:-1] + "RIGHT" + str(int(filename[-1])+1)
+			compile_class(tree.right_child,codedir,package_path,new_name)
+
+def generate_jar(jardir,path,filename):
+	cmd = "jar -cf " +jardir + "/"+ filename + ".jar " + path
+	os.system(cmd)
+	
+
+
+def execute_jar(tree,jardir,jarname,classname,input_path,output_path):
+	
+	if isinstance(tree,ystree.TableNode):
+		cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " "  + input_path + "/" + tree.table_name + "/" 
+		cmd += " " + output_path + "/" + tree.table_name + "/" 
+		print cmd
+		os.system(cmd)
+
+	elif isinstance(tree,ystree.OrderByNode):
+		if not isinstance(tree.child,ystree.TableNode):
+			new_name = classname[:-1] + str(int(classname[-1])+1)
+			execute_jar(tree.child,jardir,jarname,new_name,input_path,output_path)
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + output_path + "/" + new_name
+			cmd += " " + output_path + "/" + classname + "/"
+		else:
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + input_path + "/" + tree.child.table_name + "/"
+			cmd += " " + output_path + "/" + classname + "/"
+		print cmd
+		os.system(cmd)
+
+	elif isinstance(tree,ystree.SelectProjectNode):
+		execute_jar(tree.child,jardir,jarname,classname,input_path,output_path)
+
+	elif isinstance(tree,ystree.GroupByNode):
+		if not isinstance(tree.child,ystree.TableNode):
+			new_name = classname[:-1] + str(int(classname[-1])+1)
+			execute_jar(tree.child,jardir,jarname,new_name,input_path,output_path)
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " " + output_path + "/" + new_name
+			cmd += " " + output_path + "/" + classname + "/"
+		else:
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " " + input_path + "/" + tree.child.table_name + "/" 
+			cmd += " " + output_path + "/" + classname + "/"
+		print cmd
+		os.system(cmd)
+
+	elif isinstance(tree,ystree.TwoJoinNode):
+		cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + input_path + "/"
+		if not isinstance(tree.left_child,ystree.TableNode):
+			new_name = classname[:-1] + "LEFT" +str(int(classname[-1])+1)
+			execute_jar(tree.left_child,jardir,jarname,new_name,input_path,output_path)
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + output_path + "/"
+			cmd += new_name + "/"
+		else:
+			cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + input_path + "/"
+			cmd += tree.left_child.table_name + "/"
+
+		if not isinstance(tree.right_child,ystree.TableNode):
+			new_name = classname[:-1] + "RIGHT" + str(int(classname[-1])+1)
+			execute_jar(tree.right_child,jardir,jarname,new_name,input_path,output_path)
+			cmd += " " + output_path + "/"
+			cmd += new_name + "/"
+		else:
+			cmd += " " + input_path + "/"
+			cmd += tree.right_child.table_name + "/"
+
+		cmd += " " + output_path + "/" + classname + "/"
+		print cmd
+		os.system(cmd)
 
 
 if __name__ == '__main__':
+
+	pwd = os.getcwd()
+	codedir = "./YSmartCode"
+	jardir = "./YSmartJar"
+
         if len(sys.argv) !=4:
                 print "Usage: " +sys.argv[0] + " schema xml " + "output_file"
                 exit(-1)
+
+	packagepath += sys.argv[3] + "/"
+	packagename += "." + sys.argv[3]
 	
 	tree_node = ystree.ysmart_tree_gen(sys.argv[1],sys.argv[2])
 	
 	if tree_node is None:
 		exit(-1)
 
-	print "start generating code\n"
+	if os.path.exists(codedir) or os.path.exists(jardir):
+		print "please remove dir " +codedir + " and " + jardir + " in the current diretory."
+		exit(-1)
 
-	filename = sys.argv[3] + "1.java"
+	os.makedirs(codedir)
+	os.makedirs(jardir)
+	os.makedirs(packagepath)
+	filename = sys.argv[3] + "1"
 
-	if os.path.exists(filename):
-		print "output file",filename, "already exists. Please change the file name"
-#		exit(-1)
+	os.chdir(codedir)	
 	
 	generate_code(tree_node,filename)
+
+	os.chdir(pwd)
+
+	compile_class(tree_node,codedir,packagepath,filename)
+
+	generate_jar(jardir,packagepath,filename)
+	exit(-1)	
+	execute_jar(tree_node,jardir,filename,filename,"/user/yuanyuan/input/","/user/yuanyuan/output/")
+
 
 
