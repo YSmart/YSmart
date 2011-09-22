@@ -1949,7 +1949,6 @@ class FirstStepOrderBy:
                 #default 'ASC'
                 a_order_indicator = 'ASC'
                 a_final_item = a_order_by_item
-            print a_order_indicator
             
             tmp_order_indicator_list.append(a_order_indicator)
 
@@ -2389,12 +2388,12 @@ def __check_func_para__(exp,table_list,table_alias_dict):
             "DIVIDE":[2,["INTEGER","DECIMAL"],["INTEGER","DECIMAL"]],       \
             "AND":[0,["BOOLEAN"],["BOOLEAN"]],                              \
             "OR":[0,["BOOLEAN"],["BOOLEAN"]],                               \
-            "GTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
-            "LTH":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
-            "EQ":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]],               \
-            "LEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
-            "GEQ":[2,["INTEGER","DECIMAL","DATE"],["BOOLEAN"]],             \
-            "NOT_EQ":[2,["INTEGER","DECIMAL"],["BOOLEAN"]],                 \
+            "GTH":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],             \
+            "LTH":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],             \
+            "EQ":[2,["INTEGER","DECIMAL","TEXT","DATE","TEXT"],["BOOLEAN"]],               \
+            "LEQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],             \
+            "GEQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],             \
+            "NOT_EQ":[2,["INTEGER","DECIMAL","DATE","TEXT"],["BOOLEAN"]],                 \
             "IS":[2,["INTEGER","DECIMAL","TEXT","DATE"],["BOOLEAN"]]
         }
 
@@ -2443,6 +2442,9 @@ def __check_func_para__(exp,table_list,table_alias_dict):
                         if check_type  in ["INTEGER","DECIMAL"] and column_type  in ["INTEGER","DECIMAL"]:
                             continue
 
+                        elif check_type in ["DATE","TEXT"] and column_type in ["DATE","TEXT"]:
+                            continue
+
                         elif check_type != column_type:
                             return -1
                 else:
@@ -2481,6 +2483,9 @@ def __check_func_para__(exp,table_list,table_alias_dict):
 
                     if check_type in ["INTEGER","DECIMAL"] and para.cons_type in ["INTEGER","DECIMAL"]:
                         continue
+
+                    elif check_type in ["DATE","TEXT"] and column_type in ["DATE","TEXT"]:
+                            continue
 
                     if check_type != para.cons_type:
                         return -1
@@ -3991,8 +3996,6 @@ def column_filtering(tree):
                 for x in tree.child.select_list.tmp_exp_list:
                     if exp.column_name == tree.child.select_list.dict_exp_and_alias[x]:
                         new_exp = copy.deepcopy(x)
-                        new_exp_list.append(new_exp)
-                        new_select_dict[new_exp] = None
             else:
                 new_exp = copy.deepcopy(exp)
                 new_exp_list.append(new_exp)
@@ -4410,13 +4413,10 @@ def handle_select_star(tree):
 def ysmart_tree_gen(schema,xml_file):
 
     process_schema_in_a_file(schema)
-    #debug_global_tables()
     
     thenode = get_the_select_node_from_a_file(xml_file)
 
     node = build_plan_tree_from_a_select_node(thenode)
-
-    node.debug(1)
 
     gen_project_list(node)
 
