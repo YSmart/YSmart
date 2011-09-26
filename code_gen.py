@@ -274,6 +274,14 @@ def __where_convert_to_java__(exp,buf_dict):
 
 			return_str = __operator_to_java__(op_type,exp.func_name,tmp_list)
 
+		elif exp.func_name in agg_func_list:
+			tmp_exp = exp.parameter_list[0]
+			if isinstance(tmp_exp,ystree.YRawColExp):
+				return_str = buf_dict[tmp_exp.table_name] + "[" + str(tmp_exp.column_name) + "]"
+
+			elif isinstance(tmp_exp,ystree.YFuncExp):
+				return_str = __where_convert_to_java__(tmp_exp,buf_dict)
+
 
 		elif exp.func_name in bool_func_dict.keys():
 			tmp_list = []
@@ -1846,7 +1854,7 @@ if __name__ == '__main__':
 	compile_class(tree_node,codedir,packagepath,filename)
 
 	generate_jar(jardir,packagepath,filename)
-	exit(-1)	
+
 	execute_jar(tree_node,jardir,filename,filename,"/user/yuanyuan/input/","/user/yuanyuan/output/")
 
 

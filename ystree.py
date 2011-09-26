@@ -3073,7 +3073,7 @@ def predicate_pushdown(tree):
                     tree.child.where_condition.where_condition_exp = copy.deepcopy(new_exp)
                 else:
                     tree.child.where_condition = FirstStepWhereCondition(None)
-                    tree.child.where_condition.where_condition_exp = copy.deepcopy(new_exp)
+                    tree.child.where_condition.where_condition_exp = copy.deepcopy(new_where)
 
 ### check if all the where condition has been pushed down to the child 
             if tree.where_condition.where_condition_exp.has_groupby_func() is False:
