@@ -3363,9 +3363,7 @@ def __get_gb_list__(exp,col_list):
         col_list.append(exp)
     else:
         for x in exp.parameter_list:
-            if isinstance(x,YRawColExp):
-                col_list.append(x)
-            elif isinstance(x,YFuncExp):
+            if isinstance(x,YFuncExp):
                 __get_gb_list__(x,col_list)
     
 
@@ -3386,8 +3384,54 @@ def gen_column_index(tree):
         select_dict = tree.child.select_list.dict_exp_and_alias
         exp_list = tree.child.select_list.tmp_exp_list
 
+### generate index for the groupby clause.
+
+        if tree.group_by_clause is not None:
+            for exp in tree.group_by_clause.groupby_exp_list:
+                if isinstance(exp,YRawColExp):
+                    for tmp in exp_list:
+                        if isinstance(tmp,YRawColExp):
+                            if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
+                                exp.column_name = exp_list.index(tmp)
+                                break
+                        else:
+                            if exp.column_name == select_dict[tmp]:
+                                exp.column_name = exp_list.index(tmp)
+                                break
+
+        if tree.where_condition is not None:
+###
+###Step 1: generate index for each gb exp in the where exp(having is in the where exp already)
+###
+            col_list = []
+            __get_gb_list__(tree.where_condition.where_condition_exp,col_list)
+            for exp in col_list:
+                for tmp in tree.select_list.tmp_exp_list:
+                    if exp.compare(tmp) is True:
+                        exp_index = tree.select_list.tmp_exp_list.index(tmp)
+                        func_obj = exp.func_obj
+                        if exp.has_groupby_func() is True:
+                            new_exp = YRawColExp("AGG",exp_index)
+                            new_exp.column_type = exp.get_value_type()
+                            func_obj.replace(exp,new_exp)
+###
+###Step 2: generate index for all the rest colExp in the where exp
+###
+            col_list = []
+            __get_func_para__(tree.where_condition.where_condition_exp,col_list)
+            for exp in col_list:
+                for tmp in exp_list:
+                    if isinstance(tmp,YRawColExp):
+                        if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
+                            exp.column_name = exp_list.index(tmp)
+                            break
+                    else:
+                        if exp.column_name == select_dict[tmp]:
+                            exp.column_name = exp_list.index(tmp)
+                            break
+
         for exp in tree.select_list.tmp_exp_list:
-## generate index for the groupby select list
+## generate index for the select list first
 
             if isinstance(exp,YRawColExp):
                 for tmp in exp_list:
@@ -3415,90 +3459,6 @@ def gen_column_index(tree):
                                 tmp.column_name = exp_list.index(x)
                                 break
 
-        if tree.group_by_clause is not None:
-            for exp in tree.group_by_clause.groupby_exp_list:
-                if isinstance(exp,YRawColExp):
-                    for tmp in exp_list:
-                        if isinstance(tmp,YRawColExp):
-                            if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
-                                exp.column_name = exp_list.index(tmp)
-                                break
-                        else:
-                            if exp.column_name == select_dict[tmp]:
-                                exp.column_name = exp_list.index(tmp)
-                                break
-#####the index of the exp in the where condition is its index in the select_list
-
-        if tree.where_condition is not None:
-###
-###Step 1: generate index for all the colExp in the where exp
-###
-            col_list = []
-            __get_func_para__(tree.where_condition.where_condition_exp,col_list)
-            for exp in col_list:
-                for tmp in exp_list:
-                    if isinstance(tmp,YRawColExp):
-                        if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
-                            exp.column_name = exp_list.index(tmp)
-                            break
-                    else:
-                        if exp.column_name == select_dict[tmp]:
-                            exp.column_name = exp_list.index(tmp)
-                            break
-
-###
-###Step 2: generate index for each gb exp in the where exp
-###
-            col_list = []
-            __get_gb_list__(tree.where_condition.where_condition_exp,col_list)
-            for exp in col_list:
-                for tmp in tree.select_list.tmp_exp_list:
-                    if exp.compare(tmp) is True:
-                        exp_index = tree.select_list.tmp_exp_list.index(tmp)
-                        if exp.has_groupby_func() is True:
-                            func_obj = exp.func_obj
-                            new_exp = YRawColExp("AGG",exp_index)
-                            new_exp.column_type = exp.get_value_type()
-                            func_obj.replace(exp,new_exp)
-                        else:
-                            func_ojb = exp.func_obj
-                            new_exp = YRawColExp("NOAGG",exp_index)
-                            new_exp.column_type = exp.get_value_type()
-                            func_obj.replace(exp,new_exp)
-
-        if tree.having_clause is not None:
-####similar to the index generating for the where exp
-
-            col_list = []
-            __get_func_para__(tree.having_clause.where_condition_exp,col_list)
-            for exp in col_list:
-                for tmp in exp_list:
-                    if isinstance(tmp,YRawColExp):
-                        if exp.table_name == tmp.table_name and exp.column_name == tmp.column_name:
-                            exp.column_name = exp_list.index(tmp)
-                            break
-                    else:
-                        if exp.column_name == select_dict[tmp]:
-                            exp.column_name = exp_list.index(tmp)
-                            break
-
-            col_list = []
-            __get_gb_list__(tree.having_clause.where_condition_exp,col_list)
-            for exp in col_list:
-                for tmp in tree.select_list.tmp_exp_list:
-                    if exp.compare(tmp) is True:
-                        exp_index = tree.select_list.tmp_exp_list.index(tmp)
-                        if exp.has_groupby_func() is True:
-                            func_obj = exp.func_obj
-                            new_exp = YRawColExp("AGG",exp_index)
-                            new_exp.column_type = exp.get_value_type()
-                            func_obj.replace(exp,new_exp)
-                        else:
-                            func_ojb = exp.func_obj
-                            new_exp = YRawColExp("NOAGG",exp_index)
-                            new_exp.column_type = exp.get_value_type()
-                            func_obj.replace(exp,new_exp)
-            
         gen_column_index(tree.child)
 
     elif isinstance(tree,TwoJoinNode):
@@ -4057,13 +4017,21 @@ def column_filtering(tree):
         else:
             print 1/0
 
-        if tree.having_clause is not None:
+
+        if tree.where_condition is not None:
             col_list = []
-            __get_gb_list__(tree.having_clause.where_condition_exp,col_list)
+            __get_gb_list__(tree.where_condition.where_condition_exp,col_list)
             for x in col_list:
-                new_exp = copy.deepcopy(x)
-                tree.select_list.tmp_exp_list.append(new_exp)
-                tree.select_list.dict_exp_and_alias[new_exp] = None
+                tmp_bool = False
+                for tmp in tree.select_list.tmp_exp_list:
+                    if x.compare(tmp) is True:
+                        tmp_bool = True
+                        break
+
+                if tmp_bool is False:
+                    new_exp = copy.deepcopy(x)
+                    tree.select_list.tmp_exp_list.append(new_exp)
+                    tree.select_list.dict_exp_and_alias[new_exp] = None
 
         if tree.select_list is not None:
 
@@ -4434,6 +4402,6 @@ def ysmart_tree_gen(schema,xml_file):
     gen_table_name(node)
 
     gen_column_index(node)
-    
+
     return node
 
