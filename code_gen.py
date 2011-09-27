@@ -976,7 +976,8 @@ def __groupby_gen_mr__(tree,fo):
 	if tree.where_condition is not None:
 		buf_dict = {}
 		buf_dict["AGG"] = agg_buffer
-		buf_dict["NOAGG"] = line_buffer
+		for x in tree.table_list:
+			buf_dict[x] = line_buffer
 
 		tmp_output = "\t\t\tif("+ __where_convert_to_java__(tree.where_condition.where_condition_exp,buf_dict) + "){\n"
 		tmp_output += "\t\t\t\toutput.collect(key_op"
