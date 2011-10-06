@@ -3956,6 +3956,8 @@ def column_filtering(tree):
                 for x in tree.child.select_list.tmp_exp_list:
                     if exp.column_name == tree.child.select_list.dict_exp_and_alias[x]:
                         new_exp = copy.deepcopy(x)
+                        new_exp_list.append(new_exp)
+                        new_select_dict[new_exp] = None
             else:
                 new_exp = copy.deepcopy(exp)
                 new_exp_list.append(new_exp)
