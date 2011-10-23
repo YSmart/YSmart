@@ -18,65 +18,6 @@ rel_func_dict = {"EQ":" == ","GTH":" > ", "LTH":" < ","NOT_EQ":" != ","GEQ":" >=
 packagepath = "edu/ohiostate/cse/ysmart/"
 packagename = "edu.ohiostate.cse.ysmart"
 
-################Function definion. For aggregate functions and user define functions
-
-def __func_print__(fo):
-
-	print >>fo, "\tpublic String AVG(String[] input){\n"
-	print >>fo, "\t\tDouble res = 0;"
-	print >>fo,"\t\tfor(int i=0;i<input.size();i++){\n"
-	print >>fo,"\t\t\tres += Double.parseDouble(input[i]);"
-	print >>fo,"\t\t}\n"
-	print >>fo,"\t\tres = res/input.size();"
-	print >>fo, "\t\treturn res.toString();"
-	print >>fo, "\t}\n"
-
-
-	print >>fo, "\tpublic String SUM(String[] input){\n"
-	print >>fo, "\t\tDouble res = 0;"
-	print >>fo, "\t\tfor(int i=0;i<input.size();i++){\n"
-	print >>fo, "\t\t\tres += Double.parseDouble(input[i]);"
-	print >>fo, "\t\t}\n"
-	print >>fo, "\t\treturn res.toString();"
-	print >>fo, "\t}\n"
-
-
-	print >>fo, "\tpublic String COUNT(String[] input){\n"
-	print >>fo, "\t\treturn input.size().toString();"
-	print >>fo, "\t}\n"
-
-
-	print >>fo, "\tpublic String MAX(String[] input){\n"
-	print >>fo, "\t\t Double max = 0;"
-	print >>fo, "\t\tfor(int i=0;i<input.size();i++){\n"
-	print >>fo, "\t\t\tif(i==0){\n"
-	print >>fo, "\t\t\t\tmax = Double.parseDouble(input[i]);"
-	print >>fo, "\t\t\t}else if(Double.parseDouble(input[i]) > max){\n"
-	print >>fo, "\t\t\t\tmax = Double.parseDouble(input[i]);"
-	print >>fo, "\t\t\t}\n"
-	print >>fo, "\t\t}\n"
-	print >>fo, "\t\treturn max.toString()"
-	print >>fo, "\t}\n"
-
-
-	print >>fo, "\tpublic String MIN(String[] input){\n"
-	print >>fo, "\t\tDouble min = 0;"
-	print >>fo, "\t\tfor(int i=0;i<input.size();i++){\n"
-	print >>fo, "\t\t\tif(i==0){\n"
-	print >>fo, "\t\t\t\tmin = Double.parseDouble(input[i]);"
-	print >>fo, "\t\t\t}else if(Double.parseDouble(input[i]) < max){\n"
-	print >>fo, "\t\t\t\tmin = Double.parseDouble(input[i]);"
-	print >>fo, "\t\t\t}\n"
-	print >>fo, "\t\t}\n"
-	print >>fo, "\t\treturn min.toString()"
-	print >>fo, "\t}\n"
-
-
-	print >>fo,"\tpublic String COUNT_DISTINCT(String[] input){\n"
-	print >>fo, "\t\treturn \"\""
-	print >>fo, "\t}\n"
-
-###############end of function definition
 
 ### start translating
 
@@ -367,8 +308,14 @@ def __gen_header__(fo):
 	print >>fo,"import org.apache.hadoop.fs.Path;"
 	print >>fo,"import org.apache.hadoop.conf.*;"
 	print >>fo,"import org.apache.hadoop.io.*;"
-	print >>fo,"import org.apache.hadoop.mapred.*;"
-	print >>fo,"import org.apache.hadoop.util.*;"
+	print >>fo,"import org.apache.hadoop.util.Tool;"
+	print >>fo,"import org.apache.hadoop.util.ToolRunner;"
+	print >>fo, "import org.apache.hadoop.mapreduce.Job;"
+	print >>fo, "import org.apache.hadoop.mapreduce.Mapper;"
+	print >>fo, "import org.apache.hadoop.mapreduce.Reducer;"
+	print >>fo, "import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;"
+	print >>fo, "import org.apache.hadoop.mapreduce.lib.input.FileSplit;"
+	print >>fo, "import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;"
 	print >>fo,"\n"
 
 def __gen_mr_key__(exp_list,type,buf_dict):
@@ -481,9 +428,9 @@ def __tablenode_gen_mr__(tree,fo):
 	max_index = __get_max_index__(tree.select_list.tmp_exp_list) 
 
 
-	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
+	print >>fo,"\tpublic static class Map extends Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
 
-	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+ map_key_type + ","+map_value_type + "> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\t\tpublic void map(Object key, Text value, Context context) throws IOException,InterruptedException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
 
@@ -501,7 +448,7 @@ def __tablenode_gen_mr__(tree,fo):
 
 	if tree.where_condition is None:
 		print >>fo,"\t\t\tNullWritable key_op = NullWritable.get();"
-		tmp_output =  "\t\t\toutput.collect(" 
+		tmp_output =  "\t\t\tcontext.write(" 
 		#tmp_output += "new " + map_key_type + "(" + map_key + ")" 
 		tmp_output += "key_op" 
 		tmp_output += " , "
@@ -518,7 +465,7 @@ def __tablenode_gen_mr__(tree,fo):
 		print >>fo,where_str
 
 		print >>fo,"\t\t\t\tNullWritable key_op = NullWritable.get();"
-		tmp_output =  "\t\t\t\toutput.collect(" 
+		tmp_output =  "\t\t\t\tcontext.write(" 
 		#tmp_output += "new " + map_key_type + "(" + map_key + ")" 
 		tmp_output += "key_op"
 		tmp_output += " , "
@@ -575,9 +522,9 @@ def __orderby_gen_mr__(tree,fo):
 		max_index = len(tree.child.select_list.tmp_exp_list)
 
 
-	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
+	print >>fo,"\tpublic static class Map extends  Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
 
-	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+ map_key_type + ","+map_value_type + "> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\t\tpublic void map(Object key, Text value, Context context) throws IOException,InterruptedException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
 
@@ -594,7 +541,7 @@ def __orderby_gen_mr__(tree,fo):
 	print >>fo,"\t\t\t}\n"
 
         if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
-                tmp_output = "\t\t\toutput.collect("
+                tmp_output = "\t\t\tcontext.write("
                 tmp_output += "new " + map_key_type + "(" + map_key +")"
                 tmp_output += ","
                 tmp_output += "new " + map_value_type + "(" + map_value + ")"
@@ -608,7 +555,7 @@ def __orderby_gen_mr__(tree,fo):
                 where_str += "){\n"
                 print >>fo,where_str
 
-                tmp_output =  "\t\t\t\toutput.collect( "
+                tmp_output =  "\t\t\t\tcontext.write( "
                 tmp_output += "new " + map_key_type + "(" + map_key +")"
                 tmp_output += ","
                 tmp_output += "new " + map_value_type + "(" + map_value + ")"
@@ -627,9 +574,11 @@ def __orderby_gen_mr__(tree,fo):
 	reduce_key_type = "NullWritable"
         reduce_value_type = "Text"
 
-        print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
+        print >>fo,"\tpublic static class Reduce extends  Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 
-        print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
+        print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
+
+	print >>fo, "\t\t\t Iterator values = v.iterator();"
 
 	print >>fo, "\t\t\tNullWritable key_op = NullWritable.get();"
 
@@ -637,7 +586,7 @@ def __orderby_gen_mr__(tree,fo):
 	
 	print >>fo, "\t\t\t\tString tmp = values.next().toString();"
 
-	print >>fo, "\t\t\t\toutput.collect(key_op,new Text(tmp));" 
+	print >>fo, "\t\t\t\tcontext.write(key_op,new Text(tmp));" 
 
 	print >>fo, "\t\t\t}\n"
 
@@ -660,23 +609,30 @@ def __orderby_gen_mr__(tree,fo):
 			key_spec += "r"
 		key_spec += " "
 
-	print >>fo,"\tpublic static void main(String[] args) throws Exception{\n"
-
-	print >>fo,"\t\tJobConf conf = new JobConf("+fo.name.split(".java")[0]+".class);"
-	print >>fo,"\t\tconf.setJobName(\"ysmart\");"
-	print >>fo,"\t\tconf.setMapOutputKeyClass(" + map_key_type+".class);"
-	print >>fo,"\t\tconf.setMapOutputValueClass(" + map_value_type+ ".class);"
-	print >>fo,"\t\tconf.setOutputKeyClass("+reduce_key_type+".class);"
-	print >>fo,"\t\tconf.setOutputValueClass("+reduce_value_type+".class);"
-	print >>fo,"\t\tconf.setMapperClass(Map.class);"
-	print >>fo,"\t\tconf.setReducerClass(Reduce.class);"
-	print >>fo,"\t\tconf.set(JobContext.MAP_OUTPUT_KEY_FIELD_SEPERATOR, \"|\");"
-	print >>fo,"\t\tconf.setKeyFieldComparatorOptions(\"" +key_spec + "\");"
-	print >>fo,"\t\tFileInputFormat.addInputPath(conf, new Path(args[0]));"
-	print >>fo,"\t\tFileOutputFormat.setOutputPath(conf, new Path(args[1]));"
-	print >>fo, "\t\tJobClient.runJob(conf);"
+	print >>fo,"\tpublic int run(String[] args) throws Exception{\n"
+	job_name = fo.name.split(".java")[0]
+	print >>fo, "\t\tConfiguration conf = new Configuration();"
+	print >>fo, "\t\tconf.set(\"mapreduce.partition.keycomparator.options\",\"" + key_spec + "\");"
+	print >>fo, "\t\tconf.set(\"mapreduce.map.output.key.field.seperator\", \"|\");"
+	print >>fo, "\t\tJob job = new Job(conf, \"" + job_name + "\");"
+	print >>fo, "\t\tjob.setJarByClass(" + job_name  + ".class" + ");"
+	print >>fo,"\t\tjob.setMapOutputKeyClass(" + map_key_type+".class);"
+	print >>fo,"\t\tjob.setMapOutputValueClass(" + map_value_type+ ".class);"
+	print >>fo,"\t\tjob.setOutputKeyClass("+reduce_key_type+".class);"
+	print >>fo,"\t\tjob.setOutputValueClass("+reduce_value_type+".class);"
+	print >>fo,"\t\tjob.setMapperClass(Map.class);"
+	print >>fo,"\t\tjob.setReducerClass(Reduce.class);"
+	print >>fo, "\t\tjob.setNumReduceTasks(1);"
+	print >>fo,"\t\tFileInputFormat.addInputPath(job, new Path(args[0]));"
+	print >>fo,"\t\tFileOutputFormat.setOutputPath(job, new Path(args[1]));"
+	print >>fo, "\t\treturn (job.waitForCompletion(true) ? 0 : 1);"
 
         print >>fo,"\t}\n"
+
+	print >>fo, "\tpublic static void main(String[] args) throws Exception {\n "
+	print >>fo, "\t\tint res = ToolRunner.run(new Configuration(), new "+job_name + "(),args);"
+	print >>fo,"\t\tSystem.exit(res);"
+	print >>fo,"\t}\n"
 
 
 def __groupby_func_name__(exp):
@@ -739,9 +695,9 @@ def __groupby_gen_mr__(tree,fo):
 		
 
 
-	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+ map_key_type+","+map_value_type+">{\n"
+	print >>fo,"\tpublic static class Map extends Mapper<Object, Text,"+ map_key_type+","+map_value_type+">{\n"
 
-	print >>fo,"\t\tpublic void map(Object key, Text value, OutputCollector<"+map_key_type+","+map_value_type+"> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\t\tpublic void map(Object key, Text value, Context context) throws IOException,InterruptedException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
 	print >>fo,"\t\t\tString[] "+ line_buffer +" = new String["+ str(max_index)+"];"
@@ -758,7 +714,7 @@ def __groupby_gen_mr__(tree,fo):
 
 
 	if not isinstance(tree.child,ystree.TableNode) or tree.child.where_condition is None:
-		tmp_output = "\t\t\toutput.collect("
+		tmp_output = "\t\t\tcontext.write("
 		tmp_output += "new " + map_key_type + "(" + map_key +")"
 		tmp_output += ","
 		tmp_output += "new " + map_value_type + "(" + map_value + ")"
@@ -772,7 +728,7 @@ def __groupby_gen_mr__(tree,fo):
                 where_str += "){\n"
                 print >>fo,where_str
 
-                tmp_output =  "\t\t\t\toutput.collect( "
+                tmp_output =  "\t\t\t\tcontext.write( "
 		tmp_output += "new " + map_key_type + "(" + map_key +")"
 		tmp_output += ","
 		tmp_output += "new " + map_value_type + "(" + map_value + ")"
@@ -811,9 +767,10 @@ def __groupby_gen_mr__(tree,fo):
 	reduce_key_type = "NullWritable"
 	reduce_value_type = "Text"
 
-	print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
+	print >>fo,"\tpublic static class Reduce extends Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 	
-	print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
+	print >>fo, "\t\t\t Iterator values = v.iterator();"
 	print >>fo, "\t\t\tDouble[] "+agg_buffer+" = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];"	
 
 	print >>fo, "\t\t\tArrayList[] "+d_count_buffer+" = new ArrayList[" + str(len(tree.select_list.tmp_exp_list)) + "];"
@@ -969,9 +926,6 @@ def __groupby_gen_mr__(tree,fo):
 
 	print >>fo, "\t\t\tNullWritable key_op = NullWritable.get();"
 	
-#########fix me here: how to handle groupby's where condition
-######## right now, the where condition is not translated.
-######## here it doesn't affect the correctness of the groupby result. 
 
 	if tree.where_condition is not None:
 		buf_dict = {}
@@ -980,7 +934,7 @@ def __groupby_gen_mr__(tree,fo):
 			buf_dict[x] = line_buffer
 
 		tmp_output = "\t\t\tif("+ __where_convert_to_java__(tree.where_condition.where_condition_exp,buf_dict) + "){\n"
-		tmp_output += "\t\t\t\toutput.collect(key_op"
+		tmp_output += "\t\t\t\tcontext.write(key_op"
 		tmp_output += ","
 		tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
 		tmp_output += ");"
@@ -990,7 +944,7 @@ def __groupby_gen_mr__(tree,fo):
 
 	else:
 		#tmp_output = "\t\t\toutput.collect(new "+ reduce_key_type + "("+ reduce_key + ")" 
-		tmp_output = "\t\t\toutput.collect(key_op" 
+		tmp_output = "\t\t\tcontext.write(key_op" 
 		tmp_output += ","
 		tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
 		tmp_output += ");"
@@ -1219,20 +1173,20 @@ def __join_gen_mr__(tree,left_name,fo):
 	map_key_type = left_key_type 
 	map_value_type = "Text"  ## we need to add tag to differentiate the data from left table and right table
 	
-	print >>fo,"\tpublic static class Map extends MapReduceBase implements Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
+	print >>fo,"\tpublic static class Map extends  Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
 	print >>fo, "\t\tprivate int left = 0;"
-	print >>fo, "\t\tpublic void configure(JobConf job){\n"
+	print >>fo, "\t\tpublic void setup(Context context) throws IOException, InterruptedException {\n"
 	print >>fo, "\t\t\tint last_index = -1, start_index = -1;"
-	print >>fo, "\t\t\tString path = job.get(\"map.input.file\");"
+	print >>fo, "\t\t\tString path = ((FileSplit)context.getInputSplit()).getPath().toString();"
 	print >>fo, "\t\t\tlast_index = path.lastIndexOf(\'/\');"
 	print >>fo,"\t\t\tlast_index = last_index - 1;"
 	print >>fo, "\t\t\tstart_index = path.lastIndexOf(\'/\',last_index);"
 	print >>fo, "\t\t\tString f_name = path.substring(start_index+1,last_index+1);"
 	print >>fo, "\t\t\tif(f_name.compareTo(\"" + left_name + "\") == 0 )"
 	print >>fo, "\t\t\t\tleft = 1;"
-	print >>fo,"\t\t}" ### end of configure
+	print >>fo,"\t\t}" 
 
-	print >>fo,"\t\tpublic void map(Object key, Text value,OutputCollector<"+map_key_type+","+map_value_type+"> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\t\tpublic void map(Object key, Text value,Context context) throws IOException,InterruptedException{\n"
 	
 	print >>fo,"\t\t\tString line = value.toString();"
         
@@ -1321,7 +1275,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			print >>fo,"\t\t\t\t}\n"
 
 		if not isinstance(tree.left_child,ystree.TableNode) or tree.left_child.where_condition is None:
-			tmp_output = "\t\t\t\toutput.collect(new " + left_key_type + "(" + left_key + ")"
+			tmp_output = "\t\t\t\tcontext.write(new " + left_key_type + "(" + left_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + left_value_type + "(\"L\"+\"|\" +"+ left_value +")"
 			tmp_output += ");"
@@ -1334,7 +1288,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			where_str += "){\n"
 			print >>fo,where_str
 
-			tmp_output = "\t\t\t\t\toutput.collect(new " + left_key_type + "(" + left_key + ")"
+			tmp_output = "\t\t\t\t\tcontext.write(new " + left_key_type + "(" + left_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + left_value_type + "(\"L\"+\"|\"+"+ left_value +")"
 			tmp_output += ");"
@@ -1386,7 +1340,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			print >>fo,"\t\t\t\t}\n"
 			
 		if not isinstance(tree.right_child,ystree.TableNode) or tree.right_child.where_condition is  None:
-			tmp_output = "\t\t\t\toutput.collect(new " + right_key_type + "(" + right_key + ")"
+			tmp_output = "\t\t\t\tcontext.write(new " + right_key_type + "(" + right_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + right_value_type + "(\"R\"+\"|\" +"+ right_value +")"
 			tmp_output += ");"
@@ -1399,7 +1353,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			where_str += "){\n"
 			print >>fo,where_str
 
-			tmp_output = "\t\t\t\t\toutput.collect(new " + right_key_type + "(" + right_key + ")"
+			tmp_output = "\t\t\t\t\tcontext.write(new " + right_key_type + "(" + right_key + ")"
 			tmp_output += ", "
 			tmp_output += "new " + right_value_type + "(\"R\"+\"|\" +"+ right_value +")"
 			tmp_output += ");"
@@ -1427,9 +1381,10 @@ def __join_gen_mr__(tree,left_name,fo):
 	reduce_key_type = "NullWritable"
 	reduce_value_type = "Text"
 
-	print >>fo,"\tpublic static class Reduce extends MapReduceBase implements Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
-	print >>fo, "\t\tpublic void reduce("+map_key_type+" key, Iterator<"+map_value_type+"> values, OutputCollector<"+reduce_key_type+","+reduce_value_type+"> output, Reporter reporter) throws IOException{\n"
+	print >>fo,"\tpublic static class Reduce extends  Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
+	print >>fo, "\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
 
+	print >>fo, "Iterator values = v.iterator();"
 	print >>fo,"\t\t\tArrayList "+ left_array +" = new ArrayList();"
 	print >>fo,"\t\t\tArrayList "+ right_array +" = new ArrayList();"
 
@@ -1475,7 +1430,7 @@ def __join_gen_mr__(tree,left_name,fo):
 				print >>fo,"\t\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n" 
 
 
-				tmp_output = "output.collect("
+				tmp_output = "context.write("
 
 				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
 				tmp_output += "key_op"
@@ -1491,7 +1446,7 @@ def __join_gen_mr__(tree,left_name,fo):
 				if tree.select_list is None:
 					print 1/0
 
-				tmp_output = "output.collect("
+				tmp_output = "context.write("
 
 				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
 				tmp_output += "key_op"
@@ -1521,7 +1476,7 @@ def __join_gen_mr__(tree,left_name,fo):
 
 				print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n" 
 
-				tmp_output = "output.collect("
+				tmp_output = "context.write("
 
 				#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
 				tmp_output += "key_op"
@@ -1535,7 +1490,7 @@ def __join_gen_mr__(tree,left_name,fo):
 
 				
 			else:
-				tmp_output = "output.collect("
+				tmp_output = "context.write("
 				tmp_output += "key_op"
 				tmp_output += ","
 				tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
@@ -1573,7 +1528,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n" 
 
 
-			tmp_output = "output.collect("
+			tmp_output = "context.write("
 
 			#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
 			tmp_output += "key_op"
@@ -1590,7 +1545,7 @@ def __join_gen_mr__(tree,left_name,fo):
 			if tree.select_list is None:
 				print 1/0
 
-			tmp_output = "output.collect("
+			tmp_output = "context.write("
 
 			#tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
 			tmp_output += "key_op"
@@ -1614,36 +1569,42 @@ def __join_gen_mr__(tree,left_name,fo):
 	
 
 def __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_value_type,reduce_bool):
-	print >>fo,"\tpublic static void main(String[] args) throws Exception{\n"
+	print >>fo,"\tpublic int run(String[] args) throws Exception{\n"
 	jobname = fo.name.split(".java")[0]
 	io_path = ""
 
-	print >>fo,"\t\tJobConf conf = new JobConf("+jobname+".class);"
-	print >>fo,"\t\tconf.setJobName(\""+jobname+"\");"
-	print >>fo,"\t\tconf.setMapOutputKeyClass(" + map_key_type+".class);"
-	print >>fo,"\t\tconf.setMapOutputValueClass(" + map_value_type+ ".class);"
-	print >>fo,"\t\tconf.setOutputKeyClass("+reduce_key_type+".class);"
-	print >>fo,"\t\tconf.setOutputValueClass("+reduce_value_type+".class);"
-	print >>fo,"\t\tconf.setMapperClass(Map.class);"
+	print >>fo, "\t\tConfiguration conf = new Configuration();"
+	print >>fo, "\t\tJob job = new Job(conf,\"" + jobname + "\");"
+	print >>fo, "\t\tjob.setJarByClass("+jobname + ".class);"
+	print >>fo,"\t\tjob.setMapOutputKeyClass(" + map_key_type+".class);"
+	print >>fo,"\t\tjob.setMapOutputValueClass(" + map_value_type+ ".class);"
+	print >>fo,"\t\tjob.setOutputKeyClass("+reduce_key_type+".class);"
+	print >>fo,"\t\tjob.setOutputValueClass("+reduce_value_type+".class);"
+	print >>fo,"\t\tjob.setMapperClass(Map.class);"
 	if reduce_bool is True:
-		print >>fo,"\t\tconf.setReducerClass(Reduce.class);"
+		print >>fo,"\t\tjob.setReducerClass(Reduce.class);"
 	if isinstance(tree,ystree.TwoJoinNode):
-		print>>fo, "\t\tFileInputFormat.addInputPath(conf,new Path(args[0]));"
-		print>>fo, "\t\tFileInputFormat.addInputPath(conf,new Path(args[1]));"
+		print>>fo, "\t\tFileInputFormat.addInputPath(job,new Path(args[0]));"
+		print>>fo, "\t\tFileInputFormat.addInputPath(job,new Path(args[1]));"
 		io_path = "args[2]"
 	else:
 		io_path = "args[1]"
-		print >>fo,"\t\tFileInputFormat.addInputPath(conf, new Path(args[0]));"
-	print >>fo,"\t\tFileOutputFormat.setOutputPath(conf, new Path("+io_path+"));"
-	print >>fo, "\t\tJobClient.runJob(conf);"
+		print >>fo,"\t\tFileInputFormat.addInputPath(job, new Path(args[0]));"
+	print >>fo,"\t\tFileOutputFormat.setOutputPath(job, new Path("+io_path+"));"
+	print >>fo,"\t\treturn (job.waitForCompletion(true) ? 0 : 1);"
 
 	print >>fo,"\t}\n"
+
+	print >>fo, "\tpublic static void main(String[] args) throws Exception {\n"
+	print >>fo, "\t\t\tint res = ToolRunner.run(new Configuration(), new " + jobname + "(), args);"
+	print >>fo, "\t\t\tSystem.exit(res);"
+	print >>fo, "\t}\n"
 
 def __tablenode_code_gen__(tree,fo):
 	__gen_des__(fo)
 	__gen_header__(fo)
 
-	print >>fo,"public class "+fo.name.split(".java")[0]+"{\n"
+	print >>fo,"public class "+fo.name.split(".java")[0]+" extends Configured implements Tool{\n"
 
 	__tablenode_gen_mr__(tree,fo)
 
@@ -1653,7 +1614,7 @@ def __orderby_code_gen__(tree,fo):
 	__gen_des__(fo)
 	__gen_header__(fo)
 
-	print >>fo,"public class " +fo.name.split(".java")[0] + "{\n"
+	print >>fo,"public class " +fo.name.split(".java")[0] + " extends Configured implements Tool{\n"
 
 	__orderby_gen_mr__(tree,fo)
 
@@ -1664,7 +1625,7 @@ def __groupby_code_gen__(tree,fo):
 	__gen_des__(fo)
 	__gen_header__(fo)
 
-	print >>fo,"public class "+fo.name.split(".java")[0]+"{\n"
+	print >>fo,"public class "+fo.name.split(".java")[0]+" extends Configured implements Tool{\n"
 
 	__groupby_gen_mr__(tree,fo)
 
@@ -1674,7 +1635,7 @@ def __groupby_code_gen__(tree,fo):
 def __join_code_gen__(tree,left_name,fo):
 	__gen_des__(fo)
 	__gen_header__(fo)
-	print >>fo,"public class "+fo.name.split(".java")[0]+"{\n"
+	print >>fo,"public class "+fo.name.split(".java")[0]+" extends Configured implements Tool{\n"
 
 	__join_gen_mr__(tree,left_name,fo)
 	print >>fo, "}\n"
