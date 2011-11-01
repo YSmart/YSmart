@@ -578,7 +578,7 @@ def __orderby_gen_mr__(tree,fo):
 
         print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
 
-	print >>fo, "\t\t\t Iterator values = v.iterator();"
+	print >>fo, "\t\t\tIterator values = v.iterator();"
 
 	print >>fo, "\t\t\tNullWritable key_op = NullWritable.get();"
 
@@ -770,7 +770,7 @@ def __groupby_gen_mr__(tree,fo):
 	print >>fo,"\tpublic static class Reduce extends Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 	
 	print >>fo,"\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
-	print >>fo, "\t\t\t Iterator values = v.iterator();"
+	print >>fo, "\t\t\tIterator values = v.iterator();"
 	print >>fo, "\t\t\tDouble[] "+agg_buffer+" = new Double[" + str(len(tree.select_list.tmp_exp_list)) + "];"	
 
 	print >>fo, "\t\t\tArrayList[] "+d_count_buffer+" = new ArrayList[" + str(len(tree.select_list.tmp_exp_list)) + "];"
@@ -1384,7 +1384,7 @@ def __join_gen_mr__(tree,left_name,fo):
 	print >>fo,"\tpublic static class Reduce extends  Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
 	print >>fo, "\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
 
-	print >>fo, "Iterator values = v.iterator();"
+	print >>fo, "\t\t\tIterator values = v.iterator();"
 	print >>fo,"\t\t\tArrayList "+ left_array +" = new ArrayList();"
 	print >>fo,"\t\t\tArrayList "+ right_array +" = new ArrayList();"
 
