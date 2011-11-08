@@ -825,7 +825,7 @@ def __groupby_gen_mr__(tree,fo):
 				print >>fo, "\t\t\t\t}" 
 
 			elif tmp_name == "MIN":
-				print >>fo,"\t\t\t\tif(!i)"
+				print >>fo,"\t\t\t\tif("+line_counter+"==0)"
 				print >>fo,"\t\t\t\t\t"+agg_buffer+"[" + str(i) + "] = " + tmp_output + ";"
 				print >>fo,"\t\t\t\telse{"
 				print >>fo, "\t\t\t\t\tif("+agg_buffer+"[" + str(i) + "] > " + tmp_output + ")"
