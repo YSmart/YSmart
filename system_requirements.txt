@@ -1,0 +1,9 @@
+1. Linux 32-bit (Ubuntu or Fedora or Whatever)
+
+2. Python (not Python3)
+
+3. JAVA and GCC are needed (for ANTLR)
+
+4. If you want to let YSmart compile and execute translated JAVA codes, Hadoop 0.21.0 must be installed and HADOOP_HOME must be set.
+
+

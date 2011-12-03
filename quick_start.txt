@@ -1,0 +1,19 @@
+The simplest way to try YSmart is as follows.
+
+Step 1: install YSmart using the following command:
+
+python setup.py install
+
+Step 2: translate a TPC-H query using the following command:
+
+python translation.py tpch_test/17.sql tpch_test/tpch.schema
+
+
+The outputs of the translation are: (1) the JAVA codes in YSmartCode and (2) a file testquery.script that is the execution script. However, the default YSmart does not compile or execute its generated codes unless some configuration options are turned on. Detailes are in readme.txt.
+
+Good Luck!
+
+
+
+
+
