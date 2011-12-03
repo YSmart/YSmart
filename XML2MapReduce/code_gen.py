@@ -768,8 +768,9 @@ def __groupby_gen_mr__(tree,fo):
             break
 
     if config.advanced_agg is True:
-        if len(gb_exp_list) ==1 and ystree.__groupby_func_name__(gb_exp_list[0]) == "AVG":
-            map_value_type = "Text"
+        for exp in gb_exp_list:
+            if ystree.__groupby_func_name__(exp) == "AVG":
+                map_value_type = "Text"
 
     print >>fo,"\tpublic static class Map extends Mapper<Object, Text,"+ map_key_type+","+map_value_type+">{\n"
 
