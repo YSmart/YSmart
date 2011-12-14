@@ -635,7 +635,7 @@ class OrderByNode(QueryPlanTreeBase):
         return super(OrderByNode, self).convert_to_binary_join_tree()
 
     def get_pk(self):
-        return None
+        return []
 
     def set_composite(self,c_node,node):
         self.composite = c_node
@@ -854,7 +854,7 @@ class TableNode(QueryPlanTreeBase):
         return
 
     def get_pk(self):
-        return None
+        return []
 
     def get_mapoutput(self,table_name):
         return copy.deepcopy(self.select_list.tmp_exp_list)
