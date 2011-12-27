@@ -2634,8 +2634,36 @@ def __composite_gen_mr__(tree,fo):
                     print >>fo,"\t\t\t}"
 
                 elif join_type == "RIGHT":
-                    print "Not supported yet"
-                    print 1/0
+                    print >>fo,"\t\t\tfor(int i=0;i<"+right_input+".size();i++){"
+                    print >>fo,"\t\t\t\tString[] "+tmp_right_buf+"=((String)"+right_input+".get(i)).split(\"\\\|\");"
+                    print >>fo,"\t\t\t\tif("+left_input+".size()>0){"
+                    print >>fo,"\t\t\t\t\tfor(int j=0;j<"+left_input+".size();j++){"
+                    print >>fo,"\t\t\t\t\t\tString[] "+tmp_left_buf+"=((String)"+left_input+".get(j)).split(\"\\\|\");"
+                    reduce_value = __gen_mr_value__(x.select_list.tmp_exp_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(exp,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                        print >>fo,"\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                    print >>fo,"\t\t\t\t}else{"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"RIGHT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        new_where = __gen_join_where__(exp,"RIGHT")
+                        print >>fo,"\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+
+                    print >>fo,"\t\t\t\t}"
+                    print >>fo,"\t\t\t}"
+                    
                 else:
                     print "Not supported yet"
                     print 1/0
