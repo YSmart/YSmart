@@ -2893,15 +2893,19 @@ def generate_code(tree,filename):
 
     fo.close()
 
-def compile_class(tree,codedir,package_path,filename):
+def compile_class(tree,codedir,package_path,filename,fo):
 
     cmd = "javac -classpath $HADOOP_HOME//hadoop-common-0.21.0.jar:$HADOOP_HOME/hadoop-hdfs-0.21.0.jar:$HADOOP_HOME/hadoop-mapred-0.21.0.jar " 
     cmd += codedir + "/*.java -d ." 
-    os.system(cmd)
+    print >>fo,cmd
+    if config.compile_jar is True:
+        os.system(cmd)
 
-def generate_jar(jardir,path,filename):
+def generate_jar(jardir,path,filename,fo):
     cmd = "jar -cf " +jardir + "/"+ filename + ".jar " + path
-    os.system(cmd)
+    print >>fo,cmd
+    if config.compile_jar is True:
+        os.system(cmd)
 
 
 def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
@@ -3050,11 +3054,10 @@ def ysmart_code_gen(argv,input_path,output_path):
 
     os.chdir(resultdir)
 
-    if config.compile_jar is True:
-        compile_class(tree_node,codedir,packagepath,config.queryname)
-        generate_jar(jardir,packagepath,config.queryname)
-
     fo = open(config.scriptname,'w')
+    compile_class(tree_node,codedir,packagepath,config.queryname,fo)
+    generate_jar(jardir,packagepath,config.queryname,fo)
+
     execute_jar(tree_node,jardir,config.queryname,config.queryname,input_path,output_path,fo)
 
     os.chdir(pwd)
