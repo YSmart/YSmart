@@ -35,7 +35,7 @@ def install_frontend():
 	print 'Compiling ...';
 	print 'gcc -o YSmartFront.exe YSmartMain.c YSmartLexer.c YSmartParser.c /tmp/antrl_runtime_install_dir/lib/libantlr3c.a -I . -I /tmp/antrl_runtime_install_dir/include/';
 	print '--------------------------------------------------------------------';	
-	subprocess.check_call(['gcc', '-o', 'YSmartFront.exe', 'YSmartMain.c', 'YSmartLexer.c', 'YSmartParser.c', \
+	subprocess.check_call(['gcc', '-m32', '-o', 'YSmartFront.exe', 'YSmartMain.c', 'YSmartLexer.c', 'YSmartParser.c', \
 				   '/tmp/antrl_runtime_install_dir/lib/libantlr3c.a', '-I', '.', '-I', '/tmp/antrl_runtime_install_dir/include/']);
 	subprocess.check_call(['mv', 'YSmartFront.exe', CURRENT_DIR + '/' + EXEC_DIR]);
 	print '--------------------------------------------------------------------';	
