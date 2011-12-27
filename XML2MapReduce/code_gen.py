@@ -1732,7 +1732,88 @@ def __join_gen_mr__(tree,left_name,fo):
 
         elif join_type == "RIGHT":
 
+
+            reduce_value = __gen_mr_value__(tree.select_list.tmp_exp_list,reduce_value_type,buf_dict)
             print >>fo,"\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+            print >>fo,"\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(i)).split(\"\\\|\");"
+            print >>fo, "\t\t\t\tif(" + left_array + ".size()>0){\n"
+            
+            print >>fo,"\t\t\t\t\tfor(int j=0;j<" +left_array + ".size();j++){\n"
+            print >>fo,"\t\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(j)).split(\"\\\|\");"
+            if tree.where_condition is not None:
+                exp = tree.where_condition.where_condition_exp
+
+                print >>fo,"\t\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n"
+
+
+                tmp_output = "context.write("
+
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo, "\t\t\t\t\t\t\t",tmp_output
+
+                print >>fo,"\t\t\t\t\t\t}\n"  #### end of where condtion
+
+            else:
+                if tree.select_list is None:
+                    print 1/0
+
+                tmp_output = "context.write("
+
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo, "\t\t\t\t\t\t",tmp_output
+
+                print >>fo, "\t\t\t\t\t}\n"
+
+            print >>fo, "\t\t\t\t}else{\n"
+
+            new_list = []
+
+            __gen_join_list__(tree.select_list.tmp_exp_list,new_list,"RIGHT")
+
+            reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+
+            if tree.where_condition is not None:
+                new_where = None
+                new_where = __gen_join_where__(tree.where_condition.where_condition_exp,"RIGHT")
+
+                if new_where is None:
+                    print 1/0
+
+                print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n"
+
+                tmp_output = "context.write("
+
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo,"\t\t\t\t\t\t",tmp_output
+
+                print >>fo, "\t\t\t\t\t}"
+
+            else:
+                tmp_output = "context.write("
+                tmp_output += "key_op"
+                tmp_output += ","
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo,"\t\t\t\t\t",tmp_output
+
+            print >>fo, "\t\t\t\t}\n" ### end of else
+
 
             print >>fo, "\t\t\t}\n" ## end of for
 
@@ -2235,8 +2316,34 @@ def __composite_gen_mr__(tree,fo):
                     print >>fo,"\t\t\t}"
 
                 elif join_type == "RIGHT":
-                    print "Not Supported join type"
-                    print 1/0
+                    reduce_value = __gen_mr_value__(x.select_list.tmp_exp_list,reduce_value_type,buf_dict)
+                    print >>fo,"\t\t\tfor(int i=0;i<" + tmp_right_array + ".size();i++){"
+                    print >>fo,"\t\t\t\tString[] "+right_line_buffer+"=((String)"+tmp_right_array+".get(i)).split(\"\\\|\");"
+                    print >>fo,"\t\t\t\tif("+tmp_left_array+".size()>0){"
+                    print >>fo,"\t\t\t\t\tfor(int j=0;j<"+tmp_left_array+".size();j++){"
+                    print >>fo,"\t\t\t\t\t\tString[] "+left_line_buffer+" = ((String)"+tmp_left_array+".get(j)).split(\"\\\|\");"
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(exp,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                    print >>fo,"\t\t\t\t\t}"
+                    print >>fo,"\t\t\t\t}else{"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"RIGHT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        new_where = __gen_join_where__(x.where_condition.where_condition_exp,"RIGHT")
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+
+                    print >>fo,"\t\t\t\t}"
+                    print >>fo,"\t\t\t}"
 
                 else:
                     print "Not Supported join type"
