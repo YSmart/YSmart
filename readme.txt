@@ -8,7 +8,7 @@ YSMART: Yet another SQL-to-MapReduce Translator
 
  The main advantage of YSmart over Hive or Pig is that it can efficiently translate complex queries that have intra-query correlations. Please read YSmart's research paper for more details (http://www.cse.ohio-state.edu/hpcs/WWW/HTML/publications/papers/TR-11-7.pdf).
 
- So far, YSmart is implemented as a teaching and learning tool for executing SQL queries using MapReduce programs. It is not a full functional database system. It does not support "CREATE table" or "Loading data". It only supports SQL SELECT queries. Our tests show that YSmart can support all SQL features that occur in the TPC-H queries included in the tpch_test directory.
+ So far, YSmart is implemented as a teaching and learning tool for executing SQL queries using MapReduce programs. It is not a full functional database system. It does not support "CREATE table" or "Loading data". It only supports SQL SELECT queries. Our tests show that YSmart can support all SQL features that occur in the TPC-H queries included in the test/tpch_test directory and the Star Schema queries included in the test/ssb_test directory.
 
 2. Setup and Usage
 
@@ -45,7 +45,7 @@ A schema file used in YSmart is a plain text file to describe the structures of 
 (5) Only four data types are allowed including INTEGER, DECIMAL, DATE, and TEXT.
 (6) The file is not case-sensitive.
 
-An example file tpch.schema is included in the tpch_test directory, which describes the structures of eight tables in the TPC-H benchmark. The file is needed when using YSmart to translate the TPC-H queries in the directory. We here use the first line to explain the file.
+An example file tpch.schema is included in the test/tpch_test directory, which describes the structures of eight tables in the TPC-H benchmark. The file is needed when using YSmart to translate the TPC-H queries in the directory. We here use the first line to explain the file.
 
 NATION|N_NATIONKEY:INTEGER|N_NAME:TEXT|N_REGIONKEY:INTEGER|N_COMMENT:TEXT
 
