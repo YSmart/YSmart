@@ -2777,7 +2777,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " "  + input_path + "/" + tree.table_name + "/" 
         cmd += " " + output_path + "/" + tree.table_name + "/" 
         print >>fo, cmd
-        if config.exec_jar is True:
+        if config.compile_jar is True and config.exec_jar is True:
             os.system(cmd)
 
     elif isinstance(tree,ystree.OrderByNode):
@@ -2794,7 +2794,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
             cmd += " " + output_path + "/" + classname + "/"
 
         print >>fo,cmd
-        if config.exec_jar is True:
+        if config.compile_jar is True and config.exec_jar is True:
             os.system(cmd)
 
     elif isinstance(tree,ystree.SelectProjectNode):
@@ -2813,7 +2813,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
             cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " " + input_path + "/" + tree.child.table_name + "/" 
             cmd += " " + output_path + "/" + classname + "/"
         print >>fo,cmd
-        if config.exec_jar is True:
+        if config.compile_jar is True and config.exec_jar is True:
             os.system(cmd)
 
     elif isinstance(tree,ystree.TwoJoinNode):
@@ -2845,7 +2845,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
 
         cmd += " " + output_path + "/" + classname + "/"
         print >>fo,cmd
-        if config.exec_jar is True:
+        if config.compile_jar is True and config.exec_jar is True:
             os.system(cmd)
 
     elif isinstance(tree,ystree.CompositeNode):
@@ -2867,7 +2867,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         cmd += output_path + "/" + classname
 
         print >>fo,cmd
-        if config.exec_jar is True:
+        if config.compile_jar is True and config.exec_jar is True:
             os.system(cmd)
 
     return ret_name
@@ -2875,6 +2875,7 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
 
 def ysmart_code_gen(argv,input_path,output_path):
     pwd = os.getcwd()
+    resultdir = "./result"
     codedir = "./YSmartCode"
     jardir = "./YSmartJar"
 
@@ -2890,6 +2891,10 @@ def ysmart_code_gen(argv,input_path,output_path):
     if tree_node is None:
         exit(-1)
 
+    if os.path.exists(resultdir) is False:
+        os.makedirs(resultdir)
+
+    os.chdir(resultdir)
     if os.path.exists(codedir) or os.path.exists(jardir):
         print " dir " +codedir + " and " + jardir + " aleady exist in current diretory."
 
@@ -2908,11 +2913,15 @@ def ysmart_code_gen(argv,input_path,output_path):
 
     os.chdir(pwd)
 
+    os.chdir(resultdir)
+
     if config.compile_jar is True:
         compile_class(tree_node,codedir,packagepath,config.queryname)
         generate_jar(jardir,packagepath,config.queryname)
 
     fo = open(config.scriptname,'w')
     execute_jar(tree_node,jardir,config.queryname,config.queryname,input_path,output_path,fo)
+
+    os.chdir(pwd)
 
 
