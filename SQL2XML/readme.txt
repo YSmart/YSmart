@@ -25,10 +25,10 @@
 
 4. Eventually, we can get the SQL-to-XML part, namely YSmartFront.exe (I like to use a Windows style file name on Unix), which converts an SQL file to an XML file. The command is "./YSmartFront.exe input_sql_file > output_xml_file". The input SQL file must contain an SQL SELECT command ended by ";". The output XML file represents the abstract grammar tree of the input SQL SELECT command. And the XML file will be used as an input to the next XML-to-MapReduce step.
 
-5. The current version of YSmartFront.exe only accepts a limited range of standard SQL features. So far, the only thing we can say is that those features occured in the included TPC-H queries (in the tpch_test directory) are acceptable. Additionally, we hereby highlight several features that YSmart does not support so far.
+5. The current version of YSmartFront.exe only accepts a limited range of standard SQL features. So far, the only thing we can say is that those features occured in the included TPC-H queries (in the test/tpch_test directory) are acceptable. Additionally, we hereby highlight several features that YSmart does not support so far.
 
    1). First of all, non-SELECT commands are unacceptable.
-   2). Nested sub-queries are unacceptable. (They must be flattened as TPC-H Q17/Q18/Q21 in the tpch_test directory).
+   2). Nested sub-queries are unacceptable. (They must be flattened as TPC-H Q17/Q18/Q21 in the test/tpch_test directory).
    3). UDFs (User Defined Function) are unacceptable.
    4). Window functions are unacceptable.
    5). CAST, CASE, BETWEEN, LIKE, NOT, IN, are unacceptable.
