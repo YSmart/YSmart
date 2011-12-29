@@ -1126,7 +1126,7 @@ def __groupby_gen_mr__(tree,fo):
             reduce_value += "+"
 
         else:
-            reduce_value += __para_to_java__(exp.cons_type,exp.cons_value,line_buffer)
+            reduce_value += __para_to_java__(exp.cons_type,exp.cons_value,None)
             if reduce_value_type == "Text":
                 reduce_value += " + \"|\""
             reduce_value += "+"
@@ -2224,7 +2224,7 @@ def __composite_gen_mr__(tree,fo):
                         reduce_value += " + \"|\""
                     reduce_value += "+"
                 else:
-                    reduce_value += __para_to_java__(exp.cons_type,exp.cons_value,line_buffer)
+                    reduce_value += __para_to_java__(exp.cons_type,exp.cons_value,None)
                     if reduce_value_type == "Text":
                         reduce_value += " + \"|\""
                     reduce_value += "+"
