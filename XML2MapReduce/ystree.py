@@ -2524,6 +2524,8 @@ def process_schema_in_a_file(schema_name):
         
         to_be_added_list = []
         for a_tmp_col_raw in t_al_a[1:]:
+            if ":" not in a_tmp_col_raw:
+                continue
             a_column_name = a_tmp_col_raw.split(":")[0].upper()
             a_column_type = a_tmp_col_raw.split(":")[1].upper()
 
