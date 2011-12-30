@@ -299,19 +299,19 @@ def jfc_child_pk(new_node,child,pk_list):
         tmp_node = new_node.child_list[i]
         tmp_list = []
         if isinstance(child,ystree.TwoJoinNode):
-            if tmp_node == child.left_child:
+            if tmp_node == child.left_child or tmp_node == child.left_composite:
                 for pk in child.get_pk()[0]:
                     for exp in child.left_child.select_list.tmp_exp_list:
-                        tmp_exp = ystree.__trace_to_leaf__(tmp_node,exp,False)
+                        tmp_exp = ystree.__trace_to_leaf__(child.left_child,exp,False)
                         if tmp_exp.compare(pk) is True:
                             pk.column_name = child.left_child.select_list.tmp_exp_list.index(exp)
                             tmp_list.append(pk)
                             break
 
-            elif tmp_node == child.right_child:
+            elif tmp_node == child.right_child or tmp_node == child.right_composite:
                 for pk in child.get_pk()[1]:
                     for exp in child.right_child.select_list.tmp_exp_list:
-                        tmp_exp = ystree.__trace_to_leaf__(tmp_node,exp,False)
+                        tmp_exp = ystree.__trace_to_leaf__(child.right_child,exp,False)
                         if tmp_exp.compare(pk) is True:
                             pk.column_name = child.right_child.select_list.tmp_exp_list.index(exp)
                             tmp_list.append(pk)

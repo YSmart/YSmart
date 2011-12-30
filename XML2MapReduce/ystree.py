@@ -4619,8 +4619,8 @@ def __trace_to_leaf__(tree,exp,join_bool):
         tn = exp.table_name
         if tn == "LEFT":
             if join_bool is True and isinstance(tree.left_child,TableNode):
-                tmp_exp = copy.deepcopy(tree.left_child.select_list.tmp_exp_list[0])
-                tmp_exp.column_name = index
+                tmp_exp = copy.deepcopy(exp)
+                tmp_exp.table_name = tree.left_child.select_list.tmp_exp_list[0].table_name
                 new_exp = copy.deepcopy(__trace_to_leaf__(tree.left_child,tmp_exp,False))
             else:
                 index = exp.column_name
@@ -4628,8 +4628,8 @@ def __trace_to_leaf__(tree,exp,join_bool):
                 new_exp = copy.deepcopy(__trace_to_leaf__(tree.left_child,tmp_exp,False))
         else:
             if join_bool is True and isinstance(tree.right_child,TableNode): 
-                tmp_exp = copy.deepcopy(tree.right_child.select_list.tmp_exp_list[0])
-                tmp_exp.column_name = index
+                tmp_exp = copy.deepcopy(exp)
+                tmp_exp.table_name = tree.right_child.select_list.tmp_exp_list[0].table_name
                 new_exp = copy.deepcopy(__trace_to_leaf__(tree.right_child,tmp_exp,False))
             else:
                 index = exp.column_name
