@@ -1056,6 +1056,7 @@ def __groupby_gen_mr__(tree,fo):
             elif func_name == "AVG":
                 print >>fo, "\t\t\t\t"+agg_buffer+"["+str(i)+"] += Double.parseDouble(agg_tmp[0]);" 
                 print >>fo, "\t\t\t\t"+line_counter+"["+str(i)+"]+= Double.parseDouble(agg_tmp[1]);"
+
         print >>fo,"\t\t\t\ttmp_count++;"
         print >>fo,"\t\t\t}" #### end of while
     
@@ -1087,6 +1088,9 @@ def __groupby_gen_mr__(tree,fo):
 
             elif tmp_name == "COUNT":
                 print >>fo, "\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)"+ line_counter+";" 
+
+            elif tmp_name == "COUNT_DISTINCT":
+                print >>fo, "\t\t\t"+agg_buffer+"[" + str(i) + "] = (double)"+d_count_buffer+"["+str(i)+"].size();"
 
 
     col_list = []
@@ -1734,7 +1738,7 @@ def __join_gen_mr__(tree,left_name,fo):
 
 
             reduce_value = __gen_mr_value__(tree.select_list.tmp_exp_list,reduce_value_type,buf_dict)
-            print >>fo,"\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+            print >>fo,"\t\t\tfor(int i=0;i<" +right_array + ".size();i++){\n"
             print >>fo,"\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(i)).split(\"\\\|\");"
             print >>fo, "\t\t\t\tif(" + left_array + ".size()>0){\n"
             
@@ -1772,7 +1776,7 @@ def __join_gen_mr__(tree,left_name,fo):
 
                 print >>fo, "\t\t\t\t\t\t",tmp_output
 
-                print >>fo, "\t\t\t\t\t}\n"
+            print >>fo, "\t\t\t\t\t}\n"
 
             print >>fo, "\t\t\t\t}else{\n"
 
@@ -1884,7 +1888,7 @@ def __composite_gen_mr__(tree,fo):
         index = tree.child_list.index(node)
         tn = filename[:-1] + str(int(filename[-1]) + index +1)
         index_to_name[index] = tn
-        tree.pk_dict[tn] = tree.pk_dict[index]
+        tree.pk_dict[tn] = copy.deepcopy(tree.pk_dict[index])
         del tree.pk_dict[index]
         for exp in tree.pk_dict[tn][0]:
             exp.table_name = tn
@@ -2895,7 +2899,12 @@ def generate_code(tree,filename):
 
 def compile_class(tree,codedir,package_path,filename,fo):
 
-    cmd = "javac -classpath $HADOOP_HOME//hadoop-common-0.21.0.jar:$HADOOP_HOME/hadoop-hdfs-0.21.0.jar:$HADOOP_HOME/hadoop-mapred-0.21.0.jar " 
+    version = "0.21.0"
+    if "HADOOP_HOME" in os.environ:
+        if "-" in os.environ["HADOOP_HOME"]:
+            version = os.environ["HADOOP_HOME"].split("-")[1]
+
+    cmd = "javac -classpath $HADOOP_HOME/hadoop-common-"+version+".jar:$HADOOP_HOME/hadoop-hdfs-"+version+".jar:$HADOOP_HOME/hadoop-mapred-"+version+".jar " 
     cmd += codedir + "/*.java -d ." 
     print >>fo,cmd
     if config.compile_jar is True:
