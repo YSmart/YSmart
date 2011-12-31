@@ -9,7 +9,7 @@ Step 2: translate a TPC-H query using the following command:
 python translation.py test/tpch_test/17.sql test/tpch_test/tpch.schema
 
 
-The outputs of the translation are in the result/ direstory: (1) the JAVA codes in YSmartCode and (2) a file testquery.script that contains the compile and  execution command. However, the default YSmart does not compile or execute its generated codes unless some configuration options are turned on. Detailes are in readme.txt.
+The outputs of the translation are in the result/ direstory: (1) the JAVA codes in YSmartCode/ and (2) a file testquery.script that contains the compile and  execution command. However, the default YSmart does not compile or execute its generated codes unless some configuration options are turned on. Details are in readme.txt.
 
 Good Luck!
 
