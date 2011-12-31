@@ -1,14 +1,26 @@
-YSMART: Yet another SQL-to-MapReduce Translator
+YSmart: Yet another SQL-to-MapReduce Translator
 
 1. Overview
 
- YSmart is an SQL-to-MapReduce translator that translates an SQL command to JAVA codes for Hadoop. YSmart consists of two parts. The first part (SQL-to-XML), which is implemented in C, is to convert the SQL statement in a file to an XML file that represents the abstract grammar tree of the SQL command. And the second part (XML-to-MapReduce), which is implemented in Python, is to translate the XML file to JAVA codes. The two parts can be used individually.
+ YSmart is an SQL-to-MapReduce translator that translates an SQL command to JAVA codes for Hadoop. YSmart consists of two parts. The first part (SQL-to-XML), which is implemented in C, is to convert the SQL statement in a file to an XML file that represents the abstract syntax tree of the SQL command. And the second part (XML-to-MapReduce), which is implemented in Python, is to translate the XML file to JAVA codes. The two parts can be used individually.
 
  As its name shows, YSmart is only a translator from SQL to MapReduce. So, its inputs are an SQL file and a data schema file, and its outputs are only generated JAVA codes that are used to execute an SQL command on Hadoop. But, unlike Hive or Pig, it is not YSmart's responsibility to compile and execute those codes, although YSmart can also be configured to do that. Therefore, YSmart can be used in a machine where even no Hadoop is installed. 
 
  The main advantage of YSmart over Hive or Pig is that it can efficiently translate complex queries that have intra-query correlations. Please read YSmart's research paper for more details (http://www.cse.ohio-state.edu/hpcs/WWW/HTML/publications/papers/TR-11-7.pdf).
 
- So far, YSmart is implemented as a teaching and learning tool for executing SQL queries using MapReduce programs. It is not a full functional database system. It does not support "CREATE table" or "Loading data". It only supports SQL SELECT queries. Our tests show that YSmart can support all SQL features that occur in the TPC-H queries included in the test/tpch_test directory and the Star Schema queries included in the test/ssb_test directory.
+ So far, YSmart is implemented as a teaching and learning tool for executing SQL queries using MapReduce programs. It is not a full functional database system. It does not support "CREATE table" or "Loading data". It only supports a subset features of SQL SELECT queries. Our tests show that YSmart can support all SQL features that occur in the queries included in the test/ directory. These queries are:
+    1) All the Star Schema Benchmark queries are supported by YSmart. All the ssb queries and a ssb schema are included in test/ssb_test directory.
+    2) TPC-H query 1, 3, 5, 6, 10, 17, 18, 21 are supported by YSmart. The queries and a tpch schema are included in test/tpch_test directory. 
+
+Some SQL SELECT features are not supported by YSmart right now. You should
+avoid using these features when writing SQL queries.
+    1) user defined funcion are not supported yet.
+    2) window functions are not supported yet.
+    3) CAST, CASE, BETWEEN, LIKE, NOT, IN are not supported yet.
+    4) double quotes are not supported(use single quote instead).
+
+YSmart is still under continuous development. Please refer to the projet wiki
+page to learn about our future plans(http://code.google.com/p/ysmart/wiki/Roadmap). 
 
 2. Setup and Usage
 
@@ -26,7 +38,7 @@ YSMART: Yet another SQL-to-MapReduce Translator
 
  We then introduce YSmart's configuration options that are in the file XML2MapReduce/config.py. 
 
- (1) compile_jar: when it is True, YSmart will compile its generate code. Hadoop 0.21.0 must be installed, and $HADOOP_HOME$ must be setup.
+ (1) compile_jar: when it is True, YSmart will compile its generate code. Hadoop 0.20.x or greater must be installed, and $HADOOP_HOME$ must be setup.
 
  (2) exec_jar: when it is True, YSmart will execute its generated jars. Table data must be stored on HDFS directories.
 
@@ -45,7 +57,7 @@ A schema file used in YSmart is a plain text file to describe the structures of 
 (5) Only four data types are allowed including INTEGER, DECIMAL, DATE, and TEXT.
 (6) The file is not case-sensitive.
 
-An example file tpch.schema is included in the test/tpch_test directory, which describes the structures of eight tables in the TPC-H benchmark. The file is needed when using YSmart to translate the TPC-H queries in the directory. We here use the first line to explain the file.
+An example file tpch.schema is included in the test/tpch_test directory, which describes the structures of eight tables in the TPC-H benchmark. The schema file is needed when using YSmart to translate the TPC-H queries in the directory. We here use the first line to explain the file.
 
 NATION|N_NATIONKEY:INTEGER|N_NAME:TEXT|N_REGIONKEY:INTEGER|N_COMMENT:TEXT
 

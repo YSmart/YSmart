@@ -1,6 +1,7 @@
 #! /usr/bin/python
 
 import sys
+import commands
 import os.path
 import copy
 import ystree
@@ -2901,8 +2902,7 @@ def compile_class(tree,codedir,package_path,filename,fo):
 
     version = "0.21.0"
     if "HADOOP_HOME" in os.environ:
-        if "-" in os.environ["HADOOP_HOME"]:
-            version = os.environ["HADOOP_HOME"].split("-")[1]
+        version = commands.getoutput("$HADOOP_HOME/bin/hadoop version").split("\n")[0].split(" ")[1]
 
     cmd = "javac -classpath $HADOOP_HOME/hadoop-common-"+version+".jar:$HADOOP_HOME/hadoop-hdfs-"+version+".jar:$HADOOP_HOME/hadoop-mapred-"+version+".jar " 
     cmd += codedir + "/*.java -d ." 
