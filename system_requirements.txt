@@ -4,6 +4,6 @@
 
 3. JAVA and GCC are needed (for ANTLR)
 
-4. If you want to let YSmart compile and execute translated JAVA codes, Hadoop 0.20.x or greater must be installed and HADOOP_HOME must be set.
+4. If you want to let YSmart compile and execute translated JAVA codes, Hadoop 0.20.x or 0.21.x must be installed and HADOOP_HOME must be set.
 
 
