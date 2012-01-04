@@ -1,4 +1,4 @@
-1. Linux 32-bit or 64-bit (Ubuntu or Fedora or Whatever)
+1. Linux 32-bit or 64-bit 
 
 2. Python (not Python3)
 
