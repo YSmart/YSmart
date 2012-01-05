@@ -4,7 +4,7 @@ YSmart: An SQL-to-MapReduce Translator
 
  YSmart is an SQL-to-MapReduce translator that translates an SQL command to Java codes for Hadoop. YSmart consists of two parts. The first part (SQL-to-XML), which is implemented in C, is to convert the SQL statement in a file to an XML file that represents the abstract syntax tree of the SQL command. The second part (XML-to-MapReduce), which is implemented in Python, is to translate the XML file to Java codes. The two parts can be used individually.
 
- As its name shows, YSmart is only a translator from SQL to MapReduce. So, its inputs are an SQL file and a data schema file, and its outputs are only generated Java codes that are used to execute an SQL command on Hadoop. But, unlike Hive or Pig, it is not YSmart's responsibility to compile and execute those codes, although YSmart can also be configured to do that. Therefore, YSmart can be used in a machine where even no Hadoop is installed. 
+ As its name shows, YSmart is only a translator from SQL to MapReduce. So, its inputs are an SQL file and a data schema file, and its outputs are only generated Java codes that are used to execute the SQL command on Hadoop. But, unlike Hive or Pig, it is not YSmart's responsibility to compile and execute those codes, although YSmart can also be configured to do that. Therefore, YSmart can be used in a machine where even no Hadoop is installed. 
 
  The main advantage of YSmart over Hive or Pig is that it can efficiently translate complex queries that have intra-query correlations. Please read YSmart's research paper for more details (http://www.cse.ohio-state.edu/hpcs/WWW/HTML/publications/papers/TR-11-7.pdf).
 
@@ -12,11 +12,11 @@ YSmart: An SQL-to-MapReduce Translator
     1) All the Star Schema Benchmark queries. The Star Schema Benchmark is derived from TPC-H and it is a benchmark to measure the performance of the data warehouses. All the ssb queries and a ssb schema are included in test/ssb_test directory.
     2) TPC-H query 1, 3, 5, 6, 10, 17, 18, 21. The queries and a tpch schema are included in test/tpch_test directory. 
 
-Some SQL SELECT features are not supported by YSmart right now. You shoulda void using these features when writing SQL queries. 
-    1) user defined funcion are not supported yet.
+Some SQL SELECT features are not supported by YSmart right now. You should avoid using these features when writing SQL queries. 
+    1) user defined funcions are not supported yet.
     2) window functions are not supported yet.
     3) CAST, CASE, BETWEEN, LIKE, NOT, IN are not supported yet.
-    4) double quotes are not supported(use single quote instead).
+    4) double quotes is not supported(use single quote instead).
 
 Currently YSmart doesn't optimize the join sequence. Join will be translated
 in the sequence specified in the SQL file. YSmart is still under continuous development. Please refer to the projet wiki
@@ -57,7 +57,7 @@ page to learn about our future plans(http://code.google.com/p/ysmart/wiki/Roadma
 The schema file used in YSmart is a plain text file which describes the structures of one or more tables. Its format is defined as follows.
 (1) Each line defines the structure of a single table.
 (2) Each line contains multiple cells separated by "|".
-(3) The first cell is the name of a table.
+(3) The first cell is the name of the table.
 (4) Each one of the rest cells describes the name of a column and the data type of the column, separated by ":".
 (5) Only four data types are allowed including INTEGER, DECIMAL, DATE, and TEXT.
 (6) The file is not case-sensitive.
@@ -66,7 +66,7 @@ An example file tpch.schema is included in the test/tpch_test directory, which d
 
 NATION|N_NATIONKEY:INTEGER|N_NAME:TEXT|N_REGIONKEY:INTEGER|N_COMMENT:TEXT
 
-The line describes the schema of table NATION that has four columns. For example, the type of the first column N_NATIONKEY is INTEGER.
+The above line describes the schema of table NATION which has four columns. For example, the type of the first column N_NATIONKEY is INTEGER.
 
 We will extend the schema file format in the future version to allow more features, such as whether a column is the primary key or nullable. 
 
