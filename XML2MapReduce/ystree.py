@@ -20,6 +20,7 @@
 
 from xml.dom import minidom, Node
 import copy
+import sys
 
 
 ############################################################################################
@@ -268,8 +269,8 @@ class YExpTool:
             last_token = input_token_list[-1]
 
             if second_token["name"] != "LPAREN" or last_token["name"] != "RPAREN":
-                print input_token_list
-                print 1 / 0
+                print >>sys.stderr,input_token_list
+                exit(29)
 
 
             sub_level = 0
@@ -319,12 +320,12 @@ class YExpTool:
                 return self.convert_token_list_to_exp_tree(input_token_list[1:-1])
             
             else:
-                print input_token_list, last_token
-                print 1 / 0
+                print >>sys.stderr,input_token_list, last_token
+                exit(29)
 
         else:
-            print input_token_list, first_token
-            print 1 / 0
+            print >>sys.stderr,input_token_list, first_token
+            exit(29)
 
 
 class YExpBase:
@@ -639,8 +640,8 @@ class OrderByNode(QueryPlanTreeBase):
         super(OrderByNode, self).__init__()
 
     def release_order_by(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"OrderByNode Internal Error"
+        exit(29)
 
     def release_group_by(self):
         self.child = self.child.release_group_by()
@@ -696,12 +697,12 @@ class GroupByNode(QueryPlanTreeBase):
         super(GroupByNode, self).__init__()
 
     def release_order_by(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"GroupByNode Internal Error:release orderby"
+        exit(29)
 
     def release_group_by(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"GroupByNode Internal Error:release groupby"
+        exit(29)
 
     def convert_to_binary_join_tree(self):
         self.child = self.child.convert_to_binary_join_tree()
@@ -925,16 +926,16 @@ class TwoJoinNode(QueryPlanTreeBase):
 
 
     def release_order_by(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"WRONG"
+        exit(29)
 
     def release_group_by(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"WRONG"
+        exit(29)
 
     def convert_to_binary_join_tree(self):
-        print "WRONG"
-        print 1 / 0
+        print >>sys.stderr,"WRONG"
+        exit(29)
 
 # the get_pk function should be called after generating the index
     def get_pk(self):
@@ -1137,7 +1138,7 @@ class MultipleJoinNode(QueryPlanTreeBase):
                         if x not in a_join_node.table_alias_dict.keys():
                             a_join_node.table_alias_dict[x] = a_child.table_alias_dict[x]
                         else:
-                            print 1/0
+                            exit(29)
 
 
                     for x in a_child.table_list:
@@ -1353,8 +1354,8 @@ class LRBSelectNode:
             tn.join_info.append(a_input["jc_jointype_list"])
 
         else:
-            print "\n\nERROR: UNKNOWN TYPE in utility_convert_to_initial_plan_tree \n\n"
-
+            print >>sys.stderr,"\n\nERROR: UNKNOWN TYPE in utility_convert_to_initial_plan_tree \n\n"
+            exit(29)
 
         return tn
 
@@ -1392,7 +1393,7 @@ class LRBSelectNode:
                     if x not in final_node.table_alias_dict.keys():
                         final_node.table_alias_dict[x] = result_item.table_alias_dict[x]
                     else:
-                        print 1/0
+                        exit(29)
 
                 for x in result_item.table_list:
                     if x not in final_node.table_list:
@@ -1957,7 +1958,7 @@ class FirstStepWhereCondition:
             
             if c.tokenname != 'T_COND_OR' and c.tokenname != 'T_COND_AND':
 
-                print 1 / 0
+                exit(29)
                 
             func_name = None
             if c.tokenname == 'T_COND_OR':
@@ -2241,8 +2242,8 @@ def convert_a_select_tree(a_s_select_node):
     result = LRBSelectNode()
 
     if a_s_select_node.tokenname != 'T_SELECT':
-        print "ERROR, not T_SELECT\n"
-        return None
+        print >>sys.stderr,"ERROR, not T_SELECT\n"
+        exit(29)
 
 
     for t_child in a_s_select_node.child_list:
@@ -2533,7 +2534,7 @@ def process_schema_in_a_file(schema_name):
     fo.close()
 
     for al in als:
-        al = al[:-1]
+        al = al.rstrip()
 
         t_al_a = al.split("|")
 
@@ -2548,8 +2549,8 @@ def process_schema_in_a_file(schema_name):
 
 
             if a_column_type not in ["INTEGER", "DECIMAL", "TEXT", "DATE"]:
-                print "wrong a_column_name:", al
-                print 1 / 0
+                print >>sys.stderr,"wrong column type:", a_column_type
+                exit(39)
 
             a_col = ColumnSchema(a_column_name, a_column_type)
 
@@ -2874,7 +2875,8 @@ def __schema_having__(having_exp,groupby_list,table_list,table_alias_dict):
     res = 0
 
     if isinstance(having_exp,YFuncExp) is False:
-        print 1/0
+        print >>sys.stderr,"check schema for having_clause: no having clause"
+        exit(29)
 
     res = __check_func_para__(having_exp,table_list,table_alias_dict)
     if res == -1:
@@ -2927,8 +2929,8 @@ def __schema_where__(where,table_list,table_alias_dict):
                     break
 
         if tmp_name is None:
-            print "Grammar Error. Shouldn't be here"
-            print 1/0
+            print >>sys.stderr,"Grammar Error."
+            exit(39)
 
         column_type = global_table_dict[tmp_name].get_column_type_by_name(exp.column_name)
 
@@ -3000,28 +3002,26 @@ def check_schema(tree):
     if isinstance(tree,TableNode):
         
         if lookup_a_table(tree.table_name) is None:     
-            print "\ttable name error",tree.table_name
-            return -1 
+            print >>sys.stderr,"\tGrammar error: the table doesn't exit",tree.table_name
+            exit(39)
 
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\ttable select list error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.select_list.converted_str
-            return res
+            print >>sys.stderr,"\tGrammar error: select list error",tree.select_list.converted_str
+            exit(39)
 
         res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\ttable where error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.where_condition.converted_str
-            return res
+            print >>sys.stderr,"\tGrammar error: where condition error",tree.where_condition.converted_str
+            exit(39)
 
     elif isinstance(tree,OrderByNode):
 
         res = __schema_orderby__(tree.order_by_clause.orderby_exp_list,tree.child.select_list.dict_exp_and_alias,tree.table_list,tree.table_alias_dict)
 
         if res == -1:
-            print "Order_by_exp error"
-            return res
+            print >>sys.stderr,"Grammar error: Order_by_exp error"
+            exit(39)
 
         res = check_schema(tree.child)
         if res == 1:
@@ -3031,54 +3031,48 @@ def check_schema(tree):
         if tree.join_explicit == True:
             res = __schema_join__(tree.join_condition,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\tjoin condition error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.join_condition.converted_str
-            return -1
+            print >>sys.stderr,"\tGrammar error:join condition error",tree.join_condition.converted_str
+            exit(39)
 
         res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\twhere condition error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.where_condition.converted_str
-            print "\t",global_table_dict.keys()
-            return -1
+            print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
+            exit(39)
         
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
         if res ==-1:
-            print "\tselect list error",tree.select_list.converted_str,tree.table_list,tree.table_alias_dict
-            return -1
+            print >>sys.stderr,"\tGrammar error:select list error",tree.select_list.converted_str
+            exit(39)
 
         res = check_schema(tree.left_child)
         if res == -1:
-            print "\tleft child error"
-            return res
+            exit(39)
 
         res = check_schema(tree.right_child)
         if res == -1:
-            print "\tright child error"
-            return res
+            exit(39)
 
     elif isinstance(tree,GroupByNode):
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\tselect_list error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.select_list.converted_str
-            return res
+            print >>sys.stderr,"\tGrammar error:select_list error",tree.select_list.converted_str
+            exit(39)
 
         res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\twhere condition error"
-            return res
+            print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
+            exit(39)
         
         res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\tgroupby clause error"
-            return res
+            print >>sys.stderr,"\tGrammar error:groupby clause error"
+            exit(39)
 
         if tree.having_clause is not None:
             res = __schema_having__(tree.having_clause.where_condition_exp,tree.group_by_clause,tree.table_list,tree.table_alias_dict)
             if res == -1:
-                print "\thaving clause error"
-                return res
+                print >>sys.stderr,"\tGrammar error:having clause error"
+                exit(39)
 
         res = check_schema(tree.child)
     
@@ -3086,28 +3080,26 @@ def check_schema(tree):
 
         res = __schema_select_list__(tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\tselect_list error",tree.table_list,tree.table_alias_dict
-            print tree.select_list.converted_str
-            return res
+            print >>sys.stderr,"\tGrammar error:select_list error",tree.select_list.converted_str
+            exit(39)
 
         res = __schema_where__(tree.where_condition,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\twhere condition error",tree.table_list,tree.table_alias_dict
-            print "\t",tree.where_condition.converted_str
-            return res
+            print >>sys.stderr,"\tGrammar error:where condition error",tree.where_condition.converted_str
+            exit(39)
         
         res = __schema_groupby__(tree.group_by_clause,tree.select_list,tree.table_list,tree.table_alias_dict)
         if res == -1:
-            print "\t groupby clause error"
-            return res
+            print >>sys.stderr,"\tGrammar error:groupby clause error"
+            exit(39)
 
         res = check_schema(tree.child)
         if res == -1:
-            return res
+            exit(39)
 
     else:
         res = -1
-        pass
+        exit(39)
 
     return res
 
@@ -3145,7 +3137,8 @@ def __gen_join_key__(exp,key_bool):
 
         for x in exp.parameter_list:
             if not isinstance(x,YFuncExp):
-                print 1/0
+                print >>sys.stderr,"Internal error: __gen_join_key__"
+                exit(29)
             
             tmp_exp = __gen_join_key__(x,True)
 
@@ -3207,7 +3200,8 @@ def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
                         exp_list.append(tmp_exp)
 
                 else:
-                    print 1/0
+                    print >>sys.stderr,"Internal error:__boolean_exp_filter__"
+                    exit(29)
 
             if tmp_bool == False:
                 return None
@@ -3267,8 +3261,8 @@ def __boolean_exp_filter__(exp,table_list,table_alias_dict,remove_bool):
                 return None
 
     else:
-        print "Bool_exp_filter: shouldn't be here"
-        print 1/0
+        print >>sys.stderr,"Internal error:__boolean_exp_filter__"
+        exit(29)
 
 ### filter the groupby where expression. return the exp that can be pushed down to the child.
 ### also remove it from the original exp
@@ -3277,7 +3271,8 @@ def __groupby_where_filter__(exp):
     func_list = ["AND","OR"]
     
     if not isinstance(exp,YFuncExp):
-        print 1/0
+        print >>sys.stderr,"Internal error:__groupby_where_filter__"
+        exit(29)
 
     if exp.func_name in func_list:
         exp_list = []
@@ -3402,8 +3397,8 @@ def predicate_pushdown(tree):
                                 break
 
                     if tmp_bool is False:
-                        print "project predicate pushdown:This shouldn't happen",tmp.column_name,tree.table_list,tree.table_alias_dict,select_dict.values()
-                        print 1/0
+                        print >>sys.stderr,"project predicate pushdown:This shouldn't happen",tmp.column_name,tree.table_list,tree.table_alias_dict,select_dict.values()
+                        exit(29)
 
 
                 child_exp = __boolean_exp_filter__(exp,tree.in_table_list,tree.in_table_alias_dict,True)
@@ -3483,8 +3478,8 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
         if exp.table_name != "":
             if exp.table_name not in table_alias_dict.keys():
                 if exp.table_name not in table_list:
-                    print "Grammar Error",exp.table_name,exp.column_name,table_list,table_alias_dict
-                    print 1/0
+                    print >>sys.stderr,"Internal Error:__gen_column_index__"
+                    exit(29)
                 tmp_table =  lookup_a_table(exp.table_name) 
 
                 if tmp_table is None:
@@ -3530,7 +3525,8 @@ def __gen_column_index__(exp,table_list,table_alias_dict):
 def __gen_func_index__(exp,table_list,table_alias_dict):
 
     if isinstance(exp,YFuncExp) is not True:
-        print 1/0
+        print >>sys.stderr,"Internal Error:__gen_func_index__"
+        exit(29)
 
     if exp is None: 
         return None
@@ -3542,12 +3538,13 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
         for para in para_list:
             if isinstance(para,YRawColExp):
                 if para.column_name == "*":
-                    print  1/0
+                    print >>sys.stderr,"Internal Error:__gen_func_index__"
+                    exit(29)
                 if para.table_name in table_list:    
                     new_para = __gen_column_index__(para,table_list,table_alias_dict)
                     if new_para is None:
-                        print "COlumn Index error.",para.column_name,table_list,table_alias_dict,exp.func_name
-                        print 1/0
+                        print >>sys.stderr,"Internal Error:__gen_func_index__"
+                        exit(29)
 
                     new_para_list.append(new_para)
                 else:
@@ -3556,7 +3553,8 @@ def __gen_func_index__(exp,table_list,table_alias_dict):
             elif isinstance(para,YFuncExp):
                 tmp_exp = __gen_func_index__(para,table_list,table_alias_dict)
                 if tmp_exp is None:
-                    print 1/0 
+                    print >>sys.stderr,"Internal Error:__gen_func_index__"
+                    exit(29)
 
                 new_para_list.append(tmp_exp)
             
@@ -3582,8 +3580,8 @@ def __gen_select_index__(select_list,table_list,table_alias_dict):
 
             new_exp = __gen_column_index__(exp,table_list,table_alias_dict)
             if new_exp is None:
-                print "Column index error",exp.table_name,exp.column_name
-                print 1/0
+                print >>sys.stderr,"Internal Error:__gen_select_index__"
+                exit(29)
             new_select_dict[new_exp] = select_list.dict_exp_and_alias[exp]
             new_exp_list.append(new_exp)
 
@@ -3609,7 +3607,8 @@ def __gen_where_index__(where,table_list,table_alias_dict):
 
 def __get_gb_list__(exp,col_list):
     if isinstance(exp,YFuncExp) is False:
-        print 1/0
+        print >>sys.stderr,"Internal Error:__get_gb_list__"
+        exit(29)
 
     if exp.func_name in ["AND","OR"]:
         for x in exp.parameter_list:
@@ -3636,7 +3635,8 @@ def gen_column_index(tree):
 
     elif isinstance(tree,GroupByNode):
         if tree.select_list is None or tree.child.select_list is None:
-            print 1/0
+            print >>sys.stderr,"Internal Error:gen_column_index"
+            exit(29)
 
         select_dict = tree.child.select_list.dict_exp_and_alias
         exp_list = tree.child.select_list.tmp_exp_list
@@ -4016,8 +4016,8 @@ def __gen_project_list__(select_list,table_list,table_alias_dict,project_list):
                 a_col = ColumnSchema(exp_dict[exp],"DECIMAL")
                 project_list.append(a_col)
         else:
-            print "currently doesn't support constant in sub query"
-            print 1/0
+            print >>sys.stderr,"Internal Error:__gen_project_list__"
+            exit(29)
 
 
 def gen_project_list(tree):
@@ -4256,7 +4256,8 @@ def column_filtering(tree):
                     new_select_dict[new_exp] = None
 
         else:
-            print 1/0
+            print >>sys.stderr,"Internal Error:column_filtering"
+            exit(29)
 
 
         if tree.where_condition is not None:
@@ -4346,7 +4347,8 @@ def column_filtering(tree):
             new_dict = {}
             table_schema = lookup_a_table(tree.left_child.table_alias)
             if table_schema is None:
-                print 1/0
+                print >>sys.stderr,"Internal Error:column_filtering"
+                exit(29)
             for x in table_schema.column_list:
                 tmp_bool = False
                 for tmp in left_exp_list:
@@ -4371,7 +4373,8 @@ def column_filtering(tree):
             new_dict = {}
             table_schema = lookup_a_table(tree.right_child.table_alias)
             if table_schema is None:
-                print 1/0
+                print >>sys.stderr,"Internal Error:column_filtering"
+                exit(29)
             for x in table_schema.column_list:
                 tmp_bool = False
                 for tmp in right_exp_list:
@@ -4397,7 +4400,8 @@ def column_filtering(tree):
         new_exp_list = []       
 
         if tree.select_list is None or tree.child.select_list is None:
-            print 1/0
+            print >>sys.stderr,"Internal Error:column_filtering"
+            exit(29)
 ########shouldn't change the select_list of the sp. it may be used when generating index
         
         child_exp_list = tree.child.select_list.tmp_exp_list
@@ -4455,7 +4459,8 @@ def __gen_col_table_name__(exp,table_list,table_alias_dict):
             table_schema = lookup_a_table(table_alias_dict[exp.table_name])
     
         if table_schema is None:
-            print 1/0
+            print >>sys.stderr,"Internal Error:__gen_col_table_name__"
+            exit(29)
 
         exp.column_type = table_schema.get_column_type_by_name(exp.column_name)
         return 

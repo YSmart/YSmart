@@ -23,7 +23,7 @@ import config
 if __name__ == '__main__':
 
     if len(sys.argv) !=6: 
-        exit(-1)
+        exit(19)
 
     config.queryname = sys.argv[3]
     config.scriptname = config.queryname + ".script"

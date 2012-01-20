@@ -561,7 +561,8 @@ def job_flow_correlation(tree):
                     tree = tree.left_composite
 
             else:
-                print 1/0
+                print >>sys.stderr,"Internal Error: join correlation"
+                exit(29)
 
 
         elif left_jfc == True:
@@ -660,8 +661,8 @@ def job_flow_correlation(tree):
                     tree.child_list.remove(x)
 
             if len(tree.child_list)>0 and tree.dep>1:
-                print "dependency! need to roll back"
-                print 1/0
+                print >>sys.stderr,"Correlatioin:dependency! need to roll back"
+                exit(29)
 
         else:
             tree.dep = tree.dep+1
@@ -742,7 +743,8 @@ def adjust_composite_index(tree):
                         if node.table_alias_dict[tn_alias] == tn:
                             break
                     if tn_alias is None:
-                        print 1/0
+                        print >>sys.stderr,"Internal Error:adjust_composite_index"
+                        exit(29)
                     node.adjust_index(exp_list,tn_alias)
 
         for child in tree.child_list:
