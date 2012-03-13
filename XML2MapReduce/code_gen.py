@@ -371,7 +371,7 @@ def __get_key_value_type__(exp_list):
             res = sql_type_to_java[exp.column_type]
 
         elif isinstance(exp,ystree.YFuncExp):
-            res = sql_type_to_java["DECIMAL"]
+            res = sql_type_to_java[exp.get_value_type()]
 
         else:
             res = sql_type_to_java[exp.cons_type]
@@ -402,6 +402,7 @@ def __gen_header__(fo):
     print >>fo, "import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;"
     print >>fo, "import org.apache.hadoop.mapreduce.lib.input.FileSplit;"
     print >>fo, "import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;"
+    print >>fo, "import org.apache.hadoop.mapreduce.lib.output.MultipleOutputs;"
     print >>fo, "import org.apache.hadoop.mapreduce.lib.partition.*;"
     print >>fo,"\n"
 
@@ -533,7 +534,10 @@ def __tablenode_gen_mr__(tree,fo):
     map_value_type = __get_key_value_type__(tree.select_list.tmp_exp_list)  
     map_value = __gen_mr_value__(tree.select_list.tmp_exp_list,map_value_type,buf_dict)
 
-    max_index = __get_max_index__(tree.select_list.tmp_exp_list) 
+    exp_list = tree.select_list.tmp_exp_list
+    if tree.where_condition is not None:
+        exp_list.append(tree.where_condition.where_condition_exp)
+    max_index = __get_max_index__(exp_list) 
 
 
     print >>fo,"\tpublic static class Map extends Mapper<Object, Text,"+map_key_type+","+map_value_type+">{\n"
@@ -1282,10 +1286,11 @@ def __gen_join_list__(cur_list,new_list,table_name):
 
     count = 0
     
+    tmp_exp = ystree.YConsExp("\"NULL\"","TEXT")
     for exp in cur_list:
         if isinstance(exp,ystree.YRawColExp):
             if exp.table_name != table_name:
-                count = count +1
+                new_list.append(tmp_exp)
 
             else:
                 new_list.append(exp)
@@ -1293,10 +1298,6 @@ def __gen_join_list__(cur_list,new_list,table_name):
         elif isinstance(exp,ystree.YFuncExp):
             tmp_exp = __gen_func_exp__(exp,table_name)
             new_list.append(tmp_exp)
-
-    tmp_exp = ystree.YConsExp("\"NULL\"","TEXT")
-    for x in range(0,count):
-        new_list.append(tmp_exp)
 
 def __gen_join_where__(cur_exp,table_name):
 
@@ -1858,8 +1859,112 @@ def __join_gen_mr__(tree,left_name,fo):
 
             print >>fo, "\t\t\t}\n" ## end of for
 
-        else:
-            pass
+        elif join_type == "FULL":
+            reduce_value = __gen_mr_value__(tree.select_list.tmp_exp_list,reduce_value_type,buf_dict)
+            print >>fo, "\t\t\tif(" + left_array + ".size()>0 && "+ right_array + ".size()>0){"
+            print >>fo, "\t\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
+            print >>fo, "\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
+            print >>fo, "\t\t\t\t\tfor(int j=0;j<" +right_array + ".size();j++){\n"
+            print >>fo, "\t\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(j)).split(\"\\\|\");"
+            if tree.where_condition is not None:
+                exp = tree.where_condition.where_condition_exp
+
+                print >>fo,"\t\t\t\t\t\tif(" + __where_convert_to_java__(exp,buf_dict) + "){\n"
+
+
+                tmp_output = "context.write("
+
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo, "\t\t\t\t\t\t\t",tmp_output
+
+                print >>fo,"\t\t\t\t\t\t}\n"  #### end of where condtion
+
+            else:
+                if tree.select_list is None:
+                    print >>sys.stderr,"Internal Error:__join_gen_mr__"
+                    exit(29)
+
+                tmp_output = "context.write("
+
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+
+                print >>fo, "\t\t\t\t\t\t",tmp_output
+
+            print >>fo, "\t\t\t\t\t}" # end of right_array for
+            print >>fo, "\t\t\t\t}" # end of left_array for
+
+            print >>fo, "\t\t\t}else if(" + left_array + ".size()>0){"
+            print >>fo, "\t\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
+            print >>fo, "\t\t\t\t\tString[] " + left_line_buffer + " = ((String)" + left_array + ".get(i)).split(\"\\\|\");"
+            new_list = []
+            __gen_join_list__(tree.select_list.tmp_exp_list,new_list,"LEFT")
+            reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+            if tree.where_condition is not None:
+                new_where = None
+                new_where = __gen_join_where__(tree.where_condition.where_condition_exp,"LEFT")
+                if new_where is None:
+                    print >>sys.stderr,"Internal Error:__join_gen_mr__"
+                    exit(29)
+                print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n"
+                tmp_output = "context.write("
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+                print >>fo,"\t\t\t\t\t\t",tmp_output
+                print >>fo, "\t\t\t\t\t}"
+            else:
+                tmp_output = "context.write("
+                tmp_output += "key_op"
+                tmp_output += ","
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+                print >>fo,"\t\t\t\t\t",tmp_output
+
+            print >>fo, "\t\t\t\t}"
+
+            print >>fo, "\t\t\t}else if(" + right_array + ".size()>0){"
+            print >>fo, "\t\t\t\tfor(int i=0;i<" + right_array + ".size();i++){\n"
+            print >>fo, "\t\t\t\t\tString[] " + right_line_buffer + " = ((String)" + right_array + ".get(i)).split(\"\\\|\");"
+            new_list = []
+            __gen_join_list__(tree.select_list.tmp_exp_list,new_list,"RIGHT")
+            reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+            if tree.where_condition is not None:
+                new_where = None
+                new_where = __gen_join_where__(tree.where_condition.where_condition_exp,"RIGHT")
+
+                if new_where is None:
+                    print >>sys.stderr,"Internal Error:__join_gen_mr__"
+                    exit(29)
+                print >>fo,"\t\t\t\t\tif(" + __where_convert_to_java__(new_where,buf_dict) + "){\n"
+                tmp_output = "context.write("
+                #tmp_output += "new " + reduce_key_type + "(" + reduce_key + ")"
+                tmp_output += "key_op"
+                tmp_output += ", "
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+                print >>fo,"\t\t\t\t\t\t",tmp_output
+                print >>fo, "\t\t\t\t\t}"
+            else:
+                tmp_output = "context.write("
+                tmp_output += "key_op"
+                tmp_output += ","
+                tmp_output += "new " + reduce_value_type + "(" + reduce_value + ")"
+                tmp_output += ");"
+                print >>fo,"\t\t\t\t\t",tmp_output
+
+            print >>fo, "\t\t\t\t}"
+            print >>fo, "\t\t\t}"
 
     else:
         print >>fo,"\t\t\tfor(int i=0;i<" + left_array + ".size();i++){\n"
@@ -2064,6 +2169,12 @@ def __composite_gen_mr__(tree,fo):
     reduce_value_type = "Text"
 
     print >>fo,"\tpublic static class Reduce extends  Reducer<"+ map_key_type+","+map_value_type+","+reduce_key_type+","+reduce_value_type+">{\n"
+    if len(tree.jfc_node_list) == 0:
+        print >>fo, "\t\tprivate MultipleOutputs mos;"
+        print >>fo, "\t\tpublic void setup(Context context) throws IOException, InterruptedException{\n"
+        print >>fo, "\t\t\tmos = new MultipleOutputs(context);"
+        print >>fo, "\t\t}\n"
+
     print >>fo, "\t\tpublic void reduce("+map_key_type+" key, Iterable<"+map_value_type+"> v, Context context) throws IOException,InterruptedException{\n"
 
 ##########reduce part variable declaration
@@ -2389,6 +2500,52 @@ def __composite_gen_mr__(tree,fo):
                     print >>fo,"\t\t\t\t}"
                     print >>fo,"\t\t\t}"
 
+                elif join_type == "FULL":
+                    print >>fo, "\t\t\tif(" + tmp_left_array + ".size()>0 && "+ tmp_right_array + ".size()>0{"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<" + tmp_left_array + ".size();i++){"
+                    print >>fo, "\t\t\t\t\tString[] "+left_line_buffer+"=((String)"+tmp_left_array+".get(i)).split(\"\\\|\");"
+                    print >>fo,"\t\t\t\t\tfor(int j=0;j<"+tmp_right_array+".size();j++){"
+                    print >>fo,"\t\t\t\t\t\tString[] "+right_line_buffer+" = ((String)"+tmp_right_array+".get(j)).split(\"\\\|\");"
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(exp,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t\t}"
+                    print >>fo, "\t\t\t\t}"
+
+                    print >>fo, "\t\t\t}else if (" + tmp_left_array + ".size()>0){"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<" + tmp_left_array + ".size();i++){"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"LEFT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        new_where = __gen_join_where__(x.where_condition.where_condition_exp,"LEFT")
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t}"
+
+                    print >>fo, "\t\t\t}else if (" + tmp_right_array + ".size()>0){"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<" + tmp_right_array + ".size();i++){"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"RIGHT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        new_where = __gen_join_where__(x.where_condition.where_condition_exp,"RIGHT")
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tit_output["+str(tree.it_node_list.index(x)) + "].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t}"
+
+                    print >>fo, "\t\t\t}"
+
                 else:
                     print >>sys.stderr,"Internal Error: gen_composite"
                     exit(29)
@@ -2410,6 +2567,19 @@ def __composite_gen_mr__(tree,fo):
                 print >>fo,"\t\t\t}"
 
 ### handle jfc node
+
+    if len(tree.jfc_node_list) ==0:
+        print >>fo,"\t\t\tNullWritable key_op=NullWritable.get();"
+        print >>fo, "\t\t\tfor(int i=0;i<"+str(len(tree.it_node_list)) + ";i++){"
+        print >>fo, "\t\t\t\tfor(int j=0;j<it_output[i].size();j++){"
+        print >>fo, "\t\t\t\t\tmos.write(key_op,new Text(it_output[i].get(j).toString()),Integer.toString(i)+\"/Mul\");"
+        print >>fo, "\t\t\t\t}"
+        print >>fo, "\t\t\t}\n"
+
+        print >>fo, "\t\t}"
+        print >>fo, "\t}\n"
+        __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_value_type,True)
+        return
 
     print >>fo,"\t\t\tArrayList[] jfc_output = new ArrayList[" + str(len(tree.jfc_node_list)) + "];"
     print >>fo,"\t\t\tfor(int i=0;i<"+str(len(tree.jfc_node_list))+";i++){"
@@ -2710,6 +2880,54 @@ def __composite_gen_mr__(tree,fo):
 
                     print >>fo,"\t\t\t\t}"
                     print >>fo,"\t\t\t}"
+
+                elif join_type == "FULL":
+                    print >>fo, "\t\t\tif(" + left_input+".size()>0&&"+right_input+".size()>0){"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<"+left_input+".size();i++){"
+                    print >>fo, "\t\t\t\t\tString[] "+tmp_left_buf+"=((String)"+left_input+".get(i)).split(\"\\\|\");"
+                    print >>fo,"\t\t\t\t\tfor(int j=0;j<"+right_input+".size();j++){"
+                    print >>fo,"\t\t\t\t\t\tString[] "+tmp_right_buf+"=((String)"+right_input+".get(j)).split(\"\\\|\");"
+                    reduce_value = __gen_mr_value__(x.select_list.tmp_exp_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        print >>fo,"\t\t\t\t\t\tif("+__where_convert_to_java__(exp,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t\t}"
+                        print >>fo,"\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t}"
+                    print >>fo, "\t\t\t}else if (" + left_input + ".size()>0){"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<"+left_input+".size();i++){"
+                    print >>fo, "\t\t\t\t\tString[] "+tmp_left_buf+"=((String)"+left_input+".get(i)).split(\"\\\|\");"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"LEFT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        new_where = __gen_join_where__(exp,"LEFT")
+                        print >>fo,"\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t}"
+                    print >>fo, "\t\t\t}else if (" + right_input + ".size()>0){"
+                    print >>fo, "\t\t\t\tfor(int i=0;i<"+right_input+".size();i++){"
+                    print >>fo, "\t\t\t\t\tString[] "+tmp_right_buf+"=((String)"+right_input+".get(i)).split(\"\\\|\");"
+                    new_list = []
+                    __gen_join_list__(x.select_list.tmp_exp_list,new_list,"RIGHT")
+                    reduce_value = __gen_mr_value__(new_list,reduce_value_type,buf_dict)
+                    if x.where_condition is not None:
+                        exp = x.where_condition.where_condition_exp
+                        new_where = __gen_join_where__(exp,"RIGHT")
+                        print >>fo,"\t\t\t\t\tif("+__where_convert_to_java__(new_where,buf_dict)+"){"
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                        print >>fo,"\t\t\t\t\t}"
+                    else:
+                        print >>fo,"\t\t\t\t\t\tjfc_output["+str(tree.jfc_node_list.index(x))+"].add("+reduce_value+");"
+                    print >>fo, "\t\t\t\t}"
+                    print >>fo, "\t\t\t}"
                     
                 else:
                     print >>sys.stderr,"Internal Error: gen_composite"
@@ -2747,7 +2965,7 @@ def __composite_gen_mr__(tree,fo):
     print >>fo, "\t\t}\n"
     print >>fo, "\t}\n"
 
-    __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_value_type,False)
+    __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_value_type,True)
 
     
 
@@ -2763,7 +2981,6 @@ def __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_valu
     print >>fo,"\t\tjob.setOutputKeyClass("+reduce_key_type+".class);"
     print >>fo,"\t\tjob.setOutputValueClass("+reduce_value_type+".class);"
     print >>fo,"\t\tjob.setMapperClass(Map.class);"
-    print >>fo,"\t\tjob.setReducerClass(Reduce.class);"
     if reduce_bool is True:
         print >>fo,"\t\tjob.setReducerClass(Reduce.class);"
     if isinstance(tree,ystree.TwoJoinNode):
@@ -2774,7 +2991,7 @@ def __gen_main__(tree,fo,map_key_type,map_value_type,reduce_key_type,reduce_valu
         in_len = len(tree.mapoutput.keys())
         for i in range(0,in_len):
             print >>fo,"\t\tFileInputFormat.addInputPath(job,new Path(args["+str(i)+"]));"
-        print >>fo,"\t\tFileOutputFormat.setOutputPath(job, new Path(args[" + str(in_len) + "]));";
+            print >>fo,"\t\tFileOutputFormat.setOutputPath(job, new Path(args[" + str(in_len) + "]));";
     else:
         print >>fo,"\t\tFileInputFormat.addInputPath(job, new Path(args[0]));"
         print >>fo,"\t\tFileOutputFormat.setOutputPath(job, new Path(args[1]));"
@@ -2840,16 +3057,17 @@ def generate_code(tree,filename):
 
     op_name = filename + ".java"
 
-    fo = open(op_name,"w")
-
     ret_name = filename
-    
 
     if isinstance(tree,ystree.TableNode):
+        tree.output = filename
+        fo = open(op_name,"w")
         __tablenode_code_gen__(tree,fo)
         return ret_name
 
     elif isinstance(tree,ystree.OrderByNode):
+        tree.output = filename
+        fo = open(op_name,"w")
         __orderby_code_gen__(tree,fo)
         if tree.composite is None:
             if not isinstance(tree.child,ystree.TableNode):
@@ -2862,10 +3080,14 @@ def generate_code(tree,filename):
         return ret_name
 
     elif isinstance(tree,ystree.SelectProjectNode):
+        tree.output = filename
+        fo = open(op_name,"w")
         ret_name = generate_code(tree.child,filename)
         return ret_name
 
     elif isinstance(tree,ystree.GroupByNode):
+        tree.output = filename
+        fo = open(op_name,"w")
         __groupby_code_gen__(tree,fo)
         if tree.composite is None:
             if not isinstance(tree.child,ystree.TableNode):
@@ -2878,9 +3100,21 @@ def generate_code(tree,filename):
         return ret_name
 
     elif isinstance(tree,ystree.TwoJoinNode):
+        tree.output = filename
+        fo = open(op_name,"w")
         if tree.left_composite is not None and tree.right_composite is not None:
             new_name = filename[:-1] + str(int(filename[-1])+1)
-            __join_code_gen__(tree,new_name,fo)
+
+            if len(tree.left_composite.jfc_node_list) == 0:
+                index = -1
+                for node in tree.left_composite.it_node_list:
+                    if tree == node.parent:
+                        index = tree.left_composite.it_node_list.index(node)
+                        break
+                __join_code_gen__(tree,str(index),fo)
+            else:
+                __join_code_gen__(tree,new_name,fo)
+
             new_name = generate_code(tree.left_composite,new_name)
 
             new_name = new_name[:-1] +str(int(new_name[-1])+1)
@@ -2888,7 +3122,16 @@ def generate_code(tree,filename):
 
         elif tree.left_composite is not None:
             new_name = filename[:-1]  +str(int(filename[-1])+1)
-            __join_code_gen__(tree,new_name,fo)
+
+            if len(tree.left_composite.jfc_node_list) == 0:
+                for node in tree.left_composite.it_node_list:
+                    if tree == node.parent:
+                        index = tree.left_composite.it_node_list.index(node)
+                        break
+                __join_code_gen__(tree,str(index),fo)
+            else:
+                __join_code_gen__(tree,new_name,fo)
+
             new_name = generate_code(tree.left_composite,new_name)
             ret_name = new_name
 
@@ -2924,6 +3167,17 @@ def generate_code(tree,filename):
         return ret_name
 
     elif isinstance(tree,ystree.CompositeNode):
+
+### to make sure that the CompositeNode is only visited once
+
+        if tree.dep == -1:
+            return ret_name
+
+        tree.output = filename
+        fo = open(op_name,"w")
+
+        tree.dep = -1
+
         __composite_code_gen__(tree,fo)
 
         if len(tree.child_list) > 0:
@@ -2974,7 +3228,15 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         if not isinstance(tree.child,ystree.TableNode):
             new_name = classname[:-1] + str(int(classname[-1])+1)
             if tree.composite is not None:
-                ret_name = execute_jar(tree.composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if tree.composite.dep != -2:
+                    ret_name = execute_jar(tree.composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if len(tree.composite.jfc_node_list) == 0:
+                    index = -1
+                    for node in tree.composite.it_node_list:
+                        if node.parent == tree:
+                            index = tree.composite.it_node_list.index(node)
+                            break
+                    new_name = tree.composite.output + "/" + str(index)
             else:
                 ret_name = execute_jar(tree.child,jardir,jarname,new_name,input_path,output_path,fo)
             cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + output_path + "/" + new_name
@@ -2994,7 +3256,16 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         if not isinstance(tree.child,ystree.TableNode):
             new_name = classname[:-1] + str(int(classname[-1])+1)
             if tree.composite is not None:
-                ret_name = execute_jar(tree.composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if tree.composite.dep != -2:
+                    ret_name = execute_jar(tree.composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if len(tree.composite.jfc_node_list) == 0:
+                    index = -1
+                    for node in tree.composite.it_node_list:
+                        if node.parent == tree:
+                            index = tree.composite.it_node_list.index(node)
+                            break
+                    new_name = tree.composite.output + "/" + str(index)
+                
             else:
                 ret_name = execute_jar(tree.child,jardir,jarname,new_name,input_path,output_path,fo)
             cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath + classname + " " + output_path + "/" + new_name
@@ -3011,7 +3282,17 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         if not isinstance(tree.left_child,ystree.TableNode):
             new_name = classname[:-1] + str(int(classname[-1])+1)
             if tree.left_composite is not None:
-                ret_name = execute_jar(tree.left_composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if tree.left_composite.dep != -2:
+                    ret_name = execute_jar(tree.left_composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if len(tree.left_composite.jfc_node_list) == 0:
+                    index = -1
+                    for node in tree.left_composite.it_node_list:
+                        if node.parent == tree:
+                            index = tree.left_composite.it_node_list.index(node)
+##### Make sure the node in the it_node_list is counted only once
+                            tree.left_composite.it_node_list[index].parent = None
+                            break
+                    new_name = tree.left_composite.output + "/" + str(index)
             else:
                 ret_name = execute_jar(tree.left_child,jardir,jarname,new_name,input_path,output_path,fo)
             cmd = "$HADOOP_HOME/bin/hadoop jar " + jardir + "/" + jarname + ".jar " + packagepath +classname + " " + output_path + "/"
@@ -3024,7 +3305,16 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
         if not isinstance(tree.right_child,ystree.TableNode):
             new_name = ret_name[:-1]  + str(int(ret_name[-1])+1)
             if tree.right_composite is not None:
-                ret_name = execute_jar(tree.right_composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if tree.right_composite.dep != -2:
+                    ret_name = execute_jar(tree.right_composite,jardir,jarname,new_name,input_path,output_path,fo)
+                if len(tree.right_composite.jfc_node_list) == 0:
+                    index = -1
+                    for node in tree.right_composite.it_node_list:
+                        if node.parent == tree:
+                            index = tree.right_composite.it_node_list.index(node)
+                            tree.right_composite.it_node_list[index].parent = None
+                            break
+                    new_name = tree.right_composite.output + "/" + str(index)
             else:
                 ret_name = execute_jar(tree.right_child,jardir,jarname,new_name,input_path,output_path,fo)
             cmd += " " + output_path + "/"
@@ -3039,6 +3329,13 @@ def execute_jar(tree,jardir,jarname,classname,input_path,output_path,fo):
             os.system(cmd)
 
     elif isinstance(tree,ystree.CompositeNode):
+
+### make sure the Composite Node is visited only once
+        if tree.dep == -2:
+            return ret_name
+
+        tree.dep = -2
+
         child_list = []
         new_name = classname[:-1] + str(int(classname[-1])+1)
         child_list.append(new_name)

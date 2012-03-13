@@ -491,6 +491,17 @@ class YRawColExp(YExpBase):
         return False
 
     def get_value_type(self):
+        if self.column_type is not None:
+            pass
+        elif self.table_name == "":
+            col_res = lookup_a_column(self.column_name)
+            self.column_type = col_res[0].table_schema.get_column_type_by_name(self.column_name)
+        else:
+            col_res = lookup_a_column(self.column_name)
+            for tmp in col_res:
+                if tmp.table_schema.table_name == self.table_name:
+                    self.column_type = tmp.table_schema.get_column_type_by_name(self.column_name)
+
         return self.column_type
 
     def get_exp_type(self):
@@ -635,6 +646,7 @@ class OrderByNode(QueryPlanTreeBase):
     child = None
     parent = None
     composite = None
+    output = None
 
     def __init__(self):
         super(OrderByNode, self).__init__()
@@ -4012,8 +4024,8 @@ def __gen_project_list__(select_list,table_list,table_alias_dict,project_list):
 
         elif isinstance(exp,YFuncExp):
             if exp_dict[exp] is not None:
-                col_type = "DECIMAL"
-                a_col = ColumnSchema(exp_dict[exp],"DECIMAL")
+                col_type = exp.get_value_type()
+                a_col = ColumnSchema(exp_dict[exp],col_type)
                 project_list.append(a_col)
         else:
             print >>sys.stderr,"Internal Error:__gen_project_list__"
