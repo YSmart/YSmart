@@ -1,0 +1,322 @@
+<query>
+<node tokentype="8" tokenname="T_SELECT" line="1" positioninline="0" childcount="6">
+<content>T_SELECT</content>
+<node tokentype="4" tokenname="T_RESERVED" line="1" positioninline="0" childcount="0">
+<content>select</content>
+</node><node tokentype="9" tokenname="T_COLUMN_LIST" line="2" positioninline="1" childcount="11">
+<content>T_COLUMN_LIST</content>
+<node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="1" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="2" positioninline="1" childcount="0">
+<content>c_name</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="2" positioninline="7" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="8" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="2" positioninline="8" childcount="0">
+<content>c_custkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="2" positioninline="17" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="18" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="2" positioninline="18" childcount="0">
+<content>o_orderkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="2" positioninline="28" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="29" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="2" positioninline="29" childcount="0">
+<content>o_orderdate</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="2" positioninline="40" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="41" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="2" positioninline="41" childcount="0">
+<content>o_totalprice</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="2" positioninline="53" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="2" positioninline="54" childcount="4">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="367" tokenname="'SUM'" line="2" positioninline="54" childcount="0">
+<content>sum</content>
+</node><node tokentype="51" tokenname="LPAREN" line="2" positioninline="57" childcount="0">
+<content>(</content>
+</node><node tokentype="61" tokenname="ID" line="2" positioninline="58" childcount="0">
+<content>l_quantity</content>
+</node><node tokentype="52" tokenname="RPAREN" line="2" positioninline="68" childcount="0">
+<content>)</content>
+</node></node></node><node tokentype="11" tokenname="T_FROM" line="3" positioninline="0" childcount="8">
+<content>T_FROM</content>
+<node tokentype="4" tokenname="T_RESERVED" line="3" positioninline="0" childcount="0">
+<content>from</content>
+</node><node tokentype="51" tokenname="LPAREN" line="4" positioninline="1" childcount="0">
+<content>(</content>
+</node><node tokentype="8" tokenname="T_SELECT" line="5" positioninline="2" childcount="4">
+<content>T_SELECT</content>
+<node tokentype="4" tokenname="T_RESERVED" line="5" positioninline="2" childcount="0">
+<content>select</content>
+</node><node tokentype="9" tokenname="T_COLUMN_LIST" line="6" positioninline="3" childcount="11">
+<content>T_COLUMN_LIST</content>
+<node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="3" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="3" childcount="0">
+<content>o_custkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="6" positioninline="12" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="13" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="13" childcount="0">
+<content>o_orderkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="6" positioninline="23" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="24" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="24" childcount="0">
+<content>o_orderdate</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="6" positioninline="35" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="36" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="36" childcount="0">
+<content>o_totalprice</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="6" positioninline="48" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="49" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="49" childcount="0">
+<content>l_quantity</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="6" positioninline="59" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="6" positioninline="60" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="6" positioninline="60" childcount="0">
+<content>t_sum_quantity</content>
+</node></node></node><node tokentype="11" tokenname="T_FROM" line="7" positioninline="2" childcount="10">
+<content>T_FROM</content>
+<node tokentype="4" tokenname="T_RESERVED" line="7" positioninline="2" childcount="0">
+<content>from</content>
+</node><node tokentype="51" tokenname="LPAREN" line="8" positioninline="3" childcount="0">
+<content>(</content>
+</node><node tokentype="8" tokenname="T_SELECT" line="9" positioninline="4" childcount="4">
+<content>T_SELECT</content>
+<node tokentype="4" tokenname="T_RESERVED" line="9" positioninline="4" childcount="0">
+<content>select</content>
+</node><node tokentype="9" tokenname="T_COLUMN_LIST" line="10" positioninline="5" childcount="9">
+<content>T_COLUMN_LIST</content>
+<node tokentype="10" tokenname="T_SELECT_COLUMN" line="10" positioninline="5" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="10" positioninline="5" childcount="0">
+<content>o_custkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="10" positioninline="14" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="10" positioninline="15" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="10" positioninline="15" childcount="0">
+<content>o_orderkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="10" positioninline="25" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="10" positioninline="26" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="10" positioninline="26" childcount="0">
+<content>o_orderdate</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="10" positioninline="37" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="10" positioninline="38" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="10" positioninline="38" childcount="0">
+<content>o_totalprice</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="10" positioninline="50" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="10" positioninline="51" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="10" positioninline="51" childcount="0">
+<content>l_quantity</content>
+</node></node></node><node tokentype="11" tokenname="T_FROM" line="11" positioninline="4" childcount="6">
+<content>T_FROM</content>
+<node tokentype="4" tokenname="T_RESERVED" line="11" positioninline="4" childcount="0">
+<content>from</content>
+</node><node tokentype="61" tokenname="ID" line="12" positioninline="5" childcount="0">
+<content>orders</content>
+</node><node tokentype="61" tokenname="ID" line="12" positioninline="12" childcount="0">
+<content>oo</content>
+</node><node tokentype="43" tokenname="COMMA" line="12" positioninline="14" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="13" positioninline="5" childcount="0">
+<content>lineitem</content>
+</node><node tokentype="61" tokenname="ID" line="13" positioninline="14" childcount="0">
+<content>l</content>
+</node></node><node tokentype="13" tokenname="T_WHERE" line="14" positioninline="4" childcount="8">
+<content>T_WHERE</content>
+<node tokentype="4" tokenname="T_RESERVED" line="14" positioninline="4" childcount="0">
+<content>where</content>
+</node><node tokentype="61" tokenname="ID" line="15" positioninline="5" childcount="0">
+<content>l</content>
+</node><node tokentype="45" tokenname="DOT" line="15" positioninline="6" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="15" positioninline="7" childcount="0">
+<content>l_orderkey</content>
+</node><node tokentype="63" tokenname="EQ" line="15" positioninline="18" childcount="0">
+<content>=</content>
+</node><node tokentype="61" tokenname="ID" line="15" positioninline="20" childcount="0">
+<content>oo</content>
+</node><node tokentype="45" tokenname="DOT" line="15" positioninline="22" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="15" positioninline="23" childcount="0">
+<content>o_orderkey</content>
+</node></node></node><node tokentype="52" tokenname="RPAREN" line="16" positioninline="3" childcount="0">
+<content>)</content>
+</node><node tokentype="61" tokenname="ID" line="16" positioninline="5" childcount="0">
+<content>tt1</content>
+</node><node tokentype="43" tokenname="COMMA" line="16" positioninline="8" childcount="0">
+<content>,</content>
+</node><node tokentype="51" tokenname="LPAREN" line="17" positioninline="3" childcount="0">
+<content>(</content>
+</node><node tokentype="8" tokenname="T_SELECT" line="18" positioninline="4" childcount="4">
+<content>T_SELECT</content>
+<node tokentype="4" tokenname="T_RESERVED" line="18" positioninline="4" childcount="0">
+<content>select</content>
+</node><node tokentype="9" tokenname="T_COLUMN_LIST" line="19" positioninline="5" childcount="3">
+<content>T_COLUMN_LIST</content>
+<node tokentype="10" tokenname="T_SELECT_COLUMN" line="19" positioninline="5" childcount="1">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="61" tokenname="ID" line="19" positioninline="5" childcount="0">
+<content>l_orderkey</content>
+</node></node><node tokentype="43" tokenname="COMMA" line="19" positioninline="15" childcount="0">
+<content>,</content>
+</node><node tokentype="10" tokenname="T_SELECT_COLUMN" line="19" positioninline="16" childcount="6">
+<content>T_SELECT_COLUMN</content>
+<node tokentype="367" tokenname="'SUM'" line="19" positioninline="16" childcount="0">
+<content>sum</content>
+</node><node tokentype="51" tokenname="LPAREN" line="19" positioninline="19" childcount="0">
+<content>(</content>
+</node><node tokentype="61" tokenname="ID" line="19" positioninline="20" childcount="0">
+<content>l_quantity</content>
+</node><node tokentype="52" tokenname="RPAREN" line="19" positioninline="30" childcount="0">
+<content>)</content>
+</node><node tokentype="4" tokenname="T_RESERVED" line="19" positioninline="32" childcount="0">
+<content>as</content>
+</node><node tokentype="61" tokenname="ID" line="19" positioninline="35" childcount="0">
+<content>t_sum_quantity</content>
+</node></node></node><node tokentype="11" tokenname="T_FROM" line="20" positioninline="4" childcount="2">
+<content>T_FROM</content>
+<node tokentype="4" tokenname="T_RESERVED" line="20" positioninline="4" childcount="0">
+<content>from</content>
+</node><node tokentype="61" tokenname="ID" line="21" positioninline="5" childcount="0">
+<content>lineitem</content>
+</node></node><node tokentype="15" tokenname="T_GROUP_BY" line="22" positioninline="4" childcount="3">
+<content>T_GROUP_BY</content>
+<node tokentype="4" tokenname="T_RESERVED" line="22" positioninline="4" childcount="0">
+<content>group</content>
+</node><node tokentype="4" tokenname="T_RESERVED" line="22" positioninline="10" childcount="0">
+<content>by</content>
+</node><node tokentype="61" tokenname="ID" line="23" positioninline="5" childcount="0">
+<content>l_orderkey</content>
+</node></node></node><node tokentype="52" tokenname="RPAREN" line="24" positioninline="3" childcount="0">
+<content>)</content>
+</node><node tokentype="61" tokenname="ID" line="24" positioninline="5" childcount="0">
+<content>tt2</content>
+</node></node><node tokentype="13" tokenname="T_WHERE" line="25" positioninline="2" childcount="2">
+<content>T_WHERE</content>
+<node tokentype="4" tokenname="T_RESERVED" line="25" positioninline="2" childcount="0">
+<content>where</content>
+</node><node tokentype="22" tokenname="T_COND_AND" line="26" positioninline="3" childcount="2">
+<content>T_COND_AND</content>
+<node tokentype="22" tokenname="T_COND_AND" line="26" positioninline="3" childcount="7">
+<content>T_COND_AND</content>
+<node tokentype="61" tokenname="ID" line="26" positioninline="3" childcount="0">
+<content>tt1</content>
+</node><node tokentype="45" tokenname="DOT" line="26" positioninline="6" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="26" positioninline="7" childcount="0">
+<content>o_orderkey</content>
+</node><node tokentype="63" tokenname="EQ" line="26" positioninline="18" childcount="0">
+<content>=</content>
+</node><node tokentype="61" tokenname="ID" line="26" positioninline="20" childcount="0">
+<content>tt2</content>
+</node><node tokentype="45" tokenname="DOT" line="26" positioninline="23" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="26" positioninline="24" childcount="0">
+<content>l_orderkey</content>
+</node></node><node tokentype="22" tokenname="T_COND_AND" line="27" positioninline="3" childcount="6">
+<content>T_COND_AND</content>
+<node tokentype="4" tokenname="T_RESERVED" line="27" positioninline="3" childcount="0">
+<content>and</content>
+</node><node tokentype="61" tokenname="ID" line="27" positioninline="7" childcount="0">
+<content>tt2</content>
+</node><node tokentype="45" tokenname="DOT" line="27" positioninline="10" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="27" positioninline="11" childcount="0">
+<content>t_sum_quantity</content>
+</node><node tokentype="65" tokenname="GTH" line="27" positioninline="26" childcount="0">
+<content>?</content>
+</node><node tokentype="59" tokenname="NUMBER" line="27" positioninline="28" childcount="0">
+<content>300</content>
+</node></node></node></node></node><node tokentype="52" tokenname="RPAREN" line="28" positioninline="1" childcount="0">
+<content>)</content>
+</node><node tokentype="61" tokenname="ID" line="28" positioninline="3" childcount="0">
+<content>p</content>
+</node><node tokentype="43" tokenname="COMMA" line="28" positioninline="4" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="29" positioninline="1" childcount="0">
+<content>customer</content>
+</node><node tokentype="61" tokenname="ID" line="29" positioninline="10" childcount="0">
+<content>cc</content>
+</node></node><node tokentype="13" tokenname="T_WHERE" line="30" positioninline="0" childcount="8">
+<content>T_WHERE</content>
+<node tokentype="4" tokenname="T_RESERVED" line="30" positioninline="0" childcount="0">
+<content>where</content>
+</node><node tokentype="61" tokenname="ID" line="31" positioninline="1" childcount="0">
+<content>cc</content>
+</node><node tokentype="45" tokenname="DOT" line="31" positioninline="3" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="31" positioninline="4" childcount="0">
+<content>c_custkey</content>
+</node><node tokentype="63" tokenname="EQ" line="31" positioninline="14" childcount="0">
+<content>=</content>
+</node><node tokentype="61" tokenname="ID" line="31" positioninline="16" childcount="0">
+<content>p</content>
+</node><node tokentype="45" tokenname="DOT" line="31" positioninline="17" childcount="0">
+<content>.</content>
+</node><node tokentype="61" tokenname="ID" line="31" positioninline="18" childcount="0">
+<content>o_custkey</content>
+</node></node><node tokentype="15" tokenname="T_GROUP_BY" line="32" positioninline="0" childcount="11">
+<content>T_GROUP_BY</content>
+<node tokentype="4" tokenname="T_RESERVED" line="32" positioninline="0" childcount="0">
+<content>group</content>
+</node><node tokentype="4" tokenname="T_RESERVED" line="32" positioninline="6" childcount="0">
+<content>by</content>
+</node><node tokentype="61" tokenname="ID" line="33" positioninline="1" childcount="0">
+<content>c_name</content>
+</node><node tokentype="43" tokenname="COMMA" line="33" positioninline="7" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="33" positioninline="8" childcount="0">
+<content>c_custkey</content>
+</node><node tokentype="43" tokenname="COMMA" line="33" positioninline="17" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="33" positioninline="18" childcount="0">
+<content>o_orderkey</content>
+</node><node tokentype="43" tokenname="COMMA" line="33" positioninline="28" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="33" positioninline="29" childcount="0">
+<content>o_orderdate</content>
+</node><node tokentype="43" tokenname="COMMA" line="33" positioninline="40" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="33" positioninline="41" childcount="0">
+<content>o_totalprice</content>
+</node></node><node tokentype="19" tokenname="T_ORDER_BY_CLAUSE" line="34" positioninline="0" childcount="6">
+<content>T_ORDER_BY_CLAUSE</content>
+<node tokentype="4" tokenname="T_RESERVED" line="34" positioninline="0" childcount="0">
+<content>order</content>
+</node><node tokentype="4" tokenname="T_RESERVED" line="34" positioninline="6" childcount="0">
+<content>by</content>
+</node><node tokentype="61" tokenname="ID" line="35" positioninline="1" childcount="0">
+<content>o_totalprice</content>
+</node><node tokentype="4" tokenname="T_RESERVED" line="35" positioninline="14" childcount="0">
+<content>desc</content>
+</node><node tokentype="43" tokenname="COMMA" line="35" positioninline="18" childcount="0">
+<content>,</content>
+</node><node tokentype="61" tokenname="ID" line="35" positioninline="20" childcount="0">
+<content>o_orderdate</content>
+</node></node></node><node tokentype="42" tokenname="SEMI" line="35" positioninline="31" childcount="0">
+<content>;</content>
+</node></query>
