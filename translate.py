@@ -22,17 +22,22 @@ import os;
 import subprocess;
 import sys;
 
+import sql2xml
+
 CURRENT_DIR = os.getcwd();
 EXEC_DIR = 'bin';
 TEMP_DIR = '.tmp';
 
 def genXMLTree(queryFile, tmpFilePath):
-	try:
-		os.mkdir(TEMP_DIR);
-	except:
-		pass
+    try:
+        os.mkdir(TEMP_DIR)
+    except:
+      pass
 
-	subprocess.check_call(EXEC_DIR + '/YSmartFront.exe ' +  queryFile + ' > ' + tmpFilePath, shell=True);
+    with open(queryFile) as inputFile:
+        xmlStr = sql2xml.toXml(inputFile)
+        with open(tmpFilePath, "w") as outputFile:
+            outputFile.write(xmlStr)
 
 def genHadoopJobs(schemaFile, tmpFilePath, queryName, queryInputPath, queryOutputPath):
 	#print 'TODO: call job generation program in ./bin/';
@@ -64,7 +69,7 @@ def main():
 		queryInputPath = sys.argv[4];
 		queryOutputPath = sys.argv[5];
 
-	print '--------------------------------------------------------------------';	
+	print '--------------------------------------------------------------------';
 	print 'Generating XML tree ...';
 	genXMLTree(queryFile, tmpFilePath);
 
@@ -76,7 +81,7 @@ def main():
 	subprocess.check_call(['rm', '-rf', './' + TEMP_DIR]);
 
 
-	
+
 if __name__ == "__main__":
     main();
 
