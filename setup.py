@@ -37,16 +37,16 @@ def install_frontend():
 	subprocess.check_call('tar xzvf antlr-3.3.tar.gz', shell=True);
 	print '--------------------------------------------------------------------';	
 	print 'Generating lexer and parser ...';
-	print "java -jar antlr-3.3/lib/antlr-3.3-complete.jar YSmart.g"
+	print "java -jar antlr-3.3/lib/antlr-3.3-complete.jar YSmartPythonish.g"
 	print '--------------------------------------------------------------------';
-	subprocess.check_call('java -jar antlr-3.3/lib/antlr-3.3-complete.jar YSmart.g', shell=True)
+	subprocess.check_call('java -jar antlr-3.3/lib/antlr-3.3-complete.jar YSmartPythonish.g', shell=True)
 	
-	os.chdir(CURRENT_DIR + '/' + FRONTEND_DIR + '/antlr-3.3/runtime/C/dist');
-	subprocess.check_call(['tar', 'xzvf', 'libantlr3c-3.1.4-SNAPSHOT.tar.gz', '-C', CURRENT_DIR + '/' + FRONTEND_DIR]);
+	os.chdir(CURRENT_DIR + '/' + FRONTEND_DIR + '/antlr-3.3/runtime/Python/dist');
+	subprocess.check_call(['tar', 'xzvf', 'antlr_python_runtime-3.1.3.tar.gz', '-C', CURRENT_DIR + '/' + FRONTEND_DIR]);
 
-	os.chdir(CURRENT_DIR + '/' + FRONTEND_DIR + '/libantlr3c-3.1.4-SNAPSHOT');
-	subprocess.check_call('./configure --prefix=/tmp/antrl_runtime_install_dir', shell=True);
-	subprocess.check_call('make install', shell=True);
+	os.chdir(CURRENT_DIR + '/' + FRONTEND_DIR + '/antlr_python_runtime-3.1.3');
+# 	subprocess.check_call('./configure --prefix=/tmp/antrl_runtime_install_dir', shell=True);
+# 	subprocess.check_call('make install', shell=True);
 
 	os.chdir(CURRENT_DIR + '/' + FRONTEND_DIR);
 	print '--------------------------------------------------------------------';	
