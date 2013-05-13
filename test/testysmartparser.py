@@ -1,8 +1,13 @@
 '''
+Testcases for YSmart front end
 Created on May 7, 2013
 
 @author: fathi
 '''
+import sys
+sys.path.append("..")
+sys.path.append("../ysmart")
+ 
 from YSmartPythonishLexer import *  # import all the tokens
 from YSmartPythonishParser import *
 from antlr3.tokens import CommonToken
@@ -115,9 +120,10 @@ class Test(unittest.TestCase):
         self.sql2XmlTestScaffold("ssb_test/q4_3.sql") 
 
 
-
     def sql2XmlTestScaffold(self, inputFileName):
-        
+        '''
+        Parses the given SQL file and compares the parse tree with the expected parse tree
+        '''
         errorMsg = """Expected output and produced output do not match for %s:
                          Expected output: %s
                          ---------------------------------------------------------------

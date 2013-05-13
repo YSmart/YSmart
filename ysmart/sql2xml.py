@@ -1,4 +1,5 @@
 '''
+The frontend of YSmart. Takes an SQL query file and generates an XML representation of it.
 Created on May 6, 2013
 
 @author: Meisam
@@ -12,6 +13,9 @@ from YSmartPythonishParser import *
 
 
 def toXml(sqlFile):
+    '''
+    parses the contents of the given file and returns a string that represents the AST in xml format 
+    '''
     with sqlFile:
         # TODO Meisam: Make the grammar case insensitive?
         query = sqlFile.read().upper()
@@ -27,6 +31,9 @@ def toXml(sqlFile):
         return traverseTree(parseTree.tree)
     
 def traverseTree(tree):
+    '''
+    traverses the given tree to create an XML string  
+    '''
     isRoot = False
 
     xmlStr = ""

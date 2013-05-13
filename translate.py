@@ -22,6 +22,7 @@ import os;
 import subprocess;
 import sys;
 
+sys.path.append("ysmart") 
 import sql2xml
 
 CURRENT_DIR = os.getcwd();
