@@ -6,14 +6,13 @@ Created on May 7, 2013
 '''
 import sys
 sys.path.append("..")
-sys.path.append("../ysmart")
+sys.path.append("../SQL2XML")
  
-from YSmartPythonishLexer import *  # import all the tokens
-from YSmartPythonishParser import *
+from YSmartLexer import *  # import all the tokens
+from YSmartParser import *
 from antlr3.tokens import CommonToken
 
 import antlr3
-import sql2xml
 import unittest
 from sql2xml import toXml
 
@@ -31,7 +30,7 @@ class Test(unittest.TestCase):
     def testYsmartLexer(self):
         query = "SELECT a FROM b".upper()
         cStream = antlr3.StringStream(query)
-        lexer = YSmartPythonishLexer(cStream)
+        lexer = YSmartLexer(cStream)
         
         token = lexer.next();
         self.assertEqual(token.text, "SELECT", "Token text do not match")

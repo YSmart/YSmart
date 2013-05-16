@@ -8,8 +8,8 @@ Created on May 6, 2013
 import sys
 import antlr3
 import antlr3.tree
-from YSmartPythonishLexer import *
-from YSmartPythonishParser import *
+from YSmartLexer import *
+from YSmartParser import *
 
 
 def toXml(sqlFile):
@@ -20,11 +20,11 @@ def toXml(sqlFile):
         # TODO Meisam: Make the grammar case insensitive?
         query = sqlFile.read().upper()
         stringStream = antlr3.StringStream(query)
-        lexer = YSmartPythonishLexer(stringStream)
+        lexer = YSmartLexer(stringStream)
         
         tokenStream = antlr3.CommonTokenStream(lexer)
         
-        parser = YSmartPythonishParser(tokenStream)
+        parser = YSmartParser(tokenStream)
         
         parseTree = parser.start_rule()
         
@@ -48,7 +48,7 @@ def traverseTree(tree):
     for child in tree.children:
         token = child.token
         type = token.getType()
-        name = YSmartPythonishParser.tokenNames[type]
+        name = YSmartParser.tokenNames[type]
         line = child.getLine()
         position = child.getCharPositionInLine()
         childCount = len(child.children)

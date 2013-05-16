@@ -79,7 +79,7 @@ KNOWN ISSUES:
 
 
 
-grammar YSmartPythonish;
+grammar YSmart;
 
 options {
 	language=Python;
