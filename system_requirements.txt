@@ -1,9 +1,5 @@
 1. Linux 32-bit or 64-bit 
 
-2. Python (not Python3)
+2. Python 2.6 or 2.7 (not Python3)
 
-3. Java and GCC are needed (for ANTLR)
-
-4. If you want to let YSmart compile and execute translated Java codes, Hadoop 0.20.x or 0.21.x must be installed and HADOOP_HOME must be set.
-
-
+4. If you want YSmart to compile and execute translated MapReduce jobs, Hadoop 0.20.x or 0.21.x must be installed and HADOOP_HOME must be set.
